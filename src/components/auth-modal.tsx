@@ -1,0 +1,125 @@
+"use client"
+
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { X, MapPin } from 'lucide-react'
+
+interface AuthModalProps {
+  mode: 'login' | 'signup'
+  onClose: () => void
+  onAuth: () => void
+  onSwitchMode: (mode: 'login' | 'signup') => void
+}
+
+export function AuthModal({ mode, onClose, onAuth, onSwitchMode }: AuthModalProps) {
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [name, setName] = useState("")
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    onAuth()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <Card className="w-full max-w-md shadow-2xl border-4 border-black bg-white">
+        <CardHeader className="text-center space-y-4 relative">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="absolute right-2 top-2 h-8 w-8 text-black hover:bg-gray-100"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+          
+          <div className="flex justify-center">
+            <div className="w-12 h-12 bg-black rounded-xl flex items-center justify-center">
+              <MapPin className="w-6 h-6 text-white" />
+            </div>
+          </div>
+          
+          <CardTitle className="text-2xl font-bold text-black">
+            {mode === 'login' ? 'Welcome back' : 'Create your account'}
+          </CardTitle>
+          
+          <CardDescription className="text-gray-600">
+            {mode === 'login' 
+              ? 'Sign in to access your saved places and video history'
+              : 'Join Pind to save your discoveries and never lose track of amazing places'
+            }
+          </CardDescription>
+        </CardHeader>
+        
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-4">
+            {mode === 'signup' && (
+              <div className="space-y-2">
+                <Label htmlFor="name" className="text-black">Full Name</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Enter your full name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="h-11 border-2 border-black focus:ring-0 focus:border-black"
+                />
+              </div>
+            )}
+            
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-black">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="h-11 border-2 border-black focus:ring-0 focus:border-black"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-black">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="h-11 border-2 border-black focus:ring-0 focus:border-black"
+              />
+            </div>
+          </CardContent>
+          
+          <CardFooter className="flex flex-col space-y-4">
+            <Button
+              type="submit"
+              className="w-full h-11 bg-black hover:bg-gray-800 text-white border-2 border-black"
+            >
+              {mode === 'login' ? 'Sign In' : 'Create Account'}
+            </Button>
+            
+            <p className="text-sm text-gray-600 text-center">
+              {mode === 'login' ? "Don't have an account? " : "Already have an account? "}
+              <button
+                type="button"
+                onClick={() => onSwitchMode(mode === 'login' ? 'signup' : 'login')}
+                className="text-black hover:underline font-medium"
+              >
+                {mode === 'login' ? 'Sign Up' : 'Sign In'}
+              </button>
+            </p>
+          </CardFooter>
+        </form>
+      </Card>
+    </div>
+  )
+}
