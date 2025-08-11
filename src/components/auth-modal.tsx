@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { X, MapPin } from 'lucide-react'
+import { apiClient } from "@/lib/api"
 
 interface AuthModalProps {
   mode: 'login' | 'signup'
@@ -18,10 +19,53 @@ export function AuthModal({ mode, onClose, onAuth, onSwitchMode }: AuthModalProp
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const isValidEmail = (email: string) => {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(email);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    onAuth()
+    setError("")
+    
+    if (!isValidEmail(email)) {
+      setError('올바른 이메일 형식을 입력해주세요.')
+      return
+    }
+
+    if (!email || !password) {
+      setError('이메일과 비밀번호를 모두 입력해주세요.')
+      return
+    }
+
+    if (mode === 'signup' && !name) {
+      setError('이름을 입력해주세요.')
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      if (mode === 'login') {
+        const authResponse = await apiClient.login(email, password)
+        apiClient.saveAuthToken(authResponse.access_token, authResponse.token_type, email)
+        onAuth()
+      } else {
+        await apiClient.signup(email, password)
+        setError('회원가입 성공! 이제 로그인 해주세요.')
+        onSwitchMode('login')
+        setEmail('')
+        setPassword('')
+        setName('')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '오류가 발생했습니다. 서버가 실행 중인지 확인해주세요.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -53,6 +97,8 @@ export function AuthModal({ mode, onClose, onAuth, onSwitchMode }: AuthModalProp
               : 'Join Pind to save your discoveries and never lose track of amazing places'
             }
           </CardDescription>
+          
+          {error && <p className="text-red-600 text-sm text-center">{error}</p>}
         </CardHeader>
         
         <form onSubmit={handleSubmit}>
@@ -67,6 +113,7 @@ export function AuthModal({ mode, onClose, onAuth, onSwitchMode }: AuthModalProp
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
+                  disabled={loading}
                   className="h-11 border-2 border-black focus:ring-0 focus:border-black"
                 />
               </div>
@@ -81,6 +128,7 @@ export function AuthModal({ mode, onClose, onAuth, onSwitchMode }: AuthModalProp
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={loading}
                 className="h-11 border-2 border-black focus:ring-0 focus:border-black"
               />
             </div>
@@ -94,6 +142,7 @@ export function AuthModal({ mode, onClose, onAuth, onSwitchMode }: AuthModalProp
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={loading}
                 className="h-11 border-2 border-black focus:ring-0 focus:border-black"
               />
             </div>
@@ -102,9 +151,17 @@ export function AuthModal({ mode, onClose, onAuth, onSwitchMode }: AuthModalProp
           <CardFooter className="flex flex-col space-y-4">
             <Button
               type="submit"
-              className="w-full h-11 bg-black hover:bg-gray-800 text-white border-2 border-black"
+              disabled={loading}
+              className="w-full h-11 bg-black hover:bg-gray-800 text-white border-2 border-black disabled:opacity-50"
             >
-              {mode === 'login' ? 'Sign In' : 'Create Account'}
+              {loading
+                ? mode === 'login' 
+                  ? '로그인 중...' 
+                  : '가입 처리 중...'
+                : mode === 'login' 
+                  ? 'Sign In' 
+                  : 'Create Account'
+              }
             </Button>
             
             <p className="text-sm text-gray-600 text-center">
@@ -112,7 +169,8 @@ export function AuthModal({ mode, onClose, onAuth, onSwitchMode }: AuthModalProp
               <button
                 type="button"
                 onClick={() => onSwitchMode(mode === 'login' ? 'signup' : 'login')}
-                className="text-black hover:underline font-medium"
+                disabled={loading}
+                className="text-black hover:underline font-medium disabled:opacity-50"
               >
                 {mode === 'login' ? 'Sign Up' : 'Sign In'}
               </button>

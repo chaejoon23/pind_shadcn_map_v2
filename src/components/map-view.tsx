@@ -3,6 +3,9 @@
 import { useRef, useState, useEffect } from "react"
 import type { LocationData } from "@/components/main-dashboard"
 import { Tag } from "@/components/icons"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Search, Link2 } from 'lucide-react'
 
 // Google Maps type declaration
 declare global {
@@ -17,9 +20,12 @@ interface MapViewProps {
   selectedLocation: LocationData | null
   onPinClick: (location: LocationData) => void
   onPinHover?: (location: LocationData | null) => void
+  onProcessUrl?: (url: string) => void
+  isAnalyzing?: boolean
+  analysisProgress?: number
 }
 
-export function MapView({ locations, selectedLocation, onPinClick, onPinHover }: MapViewProps) {
+export function MapView({ locations, selectedLocation, onPinClick, onPinHover, onProcessUrl, isAnalyzing, analysisProgress }: MapViewProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [hoveredLocation, setHoveredLocation] = useState<LocationData | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null)
@@ -27,6 +33,26 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover }:
   const [markers, setMarkers] = useState<any[]>([])
   const [isMapLoaded, setIsMapLoaded] = useState(false)
   const [userZoomed, setUserZoomed] = useState(false)
+  const [videoUrl, setVideoUrl] = useState("")
+
+  // URL validation
+  const isValidUrl = videoUrl.includes('youtube.com/watch?v=') || videoUrl.includes('youtu.be/')
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!videoUrl.trim() || !isValidUrl) return
+
+    try {
+      if (onProcessUrl) {
+        await onProcessUrl(videoUrl)
+      }
+      // 검색 완료 후 입력창 비우기
+      setVideoUrl("")
+    } catch (error) {
+      console.error('URL 처리 중 오류:', error)
+    }
+  }
 
   // Load Google Maps API directly with better error handling
   const loadGoogleMapsAPI = () => {
@@ -205,25 +231,33 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover }:
 
     const newMarkers = locations.map((location) => {
       const isSelected = selectedLocation?.id === location.id
+      const isHighlighted = (location as any).isHighlighted
+      const overlapCount = (location as any).overlapCount || 1
+      
+      // 중복 위치에 따른 색상 결정
+      let markerColor = "#ef4444" // 기본 빨간색
+      if (isSelected) {
+        markerColor = "#2563eb" // 선택된 경우 파란색
+      } else if (isHighlighted) {
+        markerColor = "#dc2626" // 중복된 위치는 더 진한 빨간색
+      }
+      
+      // 중복 횟수에 따른 크기 조정
+      const markerSize = isHighlighted ? Math.min(32 + (overlapCount * 4), 48) : 32
       
       const marker = new window.google.maps.Marker({
         position: { lat: location.coordinates.lat, lng: location.coordinates.lng },
         map: googleMap,
-        title: location.name,
+        title: `${location.name}${isHighlighted ? ` (${overlapCount}개 비디오)` : ''}`,
         icon: {
-          url: isSelected 
-            ? 'data:image/svg+xml;base64,' + btoa(`
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#2563eb"/>
-              </svg>
-            `)
-            : 'data:image/svg+xml;base64,' + btoa(`
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#ef4444"/>
-              </svg>
-            `),
-          scaledSize: new window.google.maps.Size(32, 32),
-          anchor: new window.google.maps.Point(16, 32)
+          url: 'data:image/svg+xml;base64,' + btoa(`
+            <svg width="${markerSize}" height="${markerSize}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="${markerColor}" stroke="#ffffff" stroke-width="${isHighlighted ? '1' : '0.5'}"/>
+              ${isHighlighted ? `<text x="12" y="9" text-anchor="middle" font-family="Arial, sans-serif" font-size="4" font-weight="bold" fill="white">${overlapCount}</text>` : ''}
+            </svg>
+          `),
+          scaledSize: new window.google.maps.Size(markerSize, markerSize),
+          anchor: new window.google.maps.Point(markerSize/2, markerSize)
         }
       })
 
@@ -231,84 +265,75 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover }:
       const infoWindow = new window.google.maps.InfoWindow({
         content: `
           <style>
-            /* General InfoWindow container styles */
             .gm-style-iw-c {
               padding: 0 !important;
-              border-radius: 12px !important; /* More rounded corners */
-              box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15) !important; /* Softer, larger shadow */
-              overflow: hidden !important; /* Ensure content respects border-radius */
+              border-radius: 12px !important;
+              box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15) !important;
+              overflow: hidden !important;
             }
-            /* Remove the default InfoWindow arrow */
             .gm-style-iw-t::after {
               display: none !important;
             }
-            /* Hide the default close button */
             .gm-ui-hover-effect {
               display: none !important;
             }
-            /* Custom content wrapper */
             .custom-infowindow-content {
-              padding: 16px; /* More padding */
-              background: #ffffff; /* White background */
-              color: #333; /* Darker text for better contrast */
-              font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; /* Modern font stack */
+              padding: 16px;
+              background: #ffffff;
+              color: #333;
+              font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
               font-size: 14px;
               line-height: 1.5;
             }
             .custom-infowindow-header {
               display: flex;
               align-items: center;
-              gap: 12px; /* More space between icon and text */
+              gap: 12px;
               margin-bottom: 10px;
             }
             .custom-infowindow-icon {
-              width: 36px; /* Larger icon */
+              width: 36px;
               height: 36px;
               border-radius: 50%;
-              background: #4285F4; /* Google Blue for the icon background */
+              background: ${isHighlighted ? '#dc2626' : '#4285F4'};
               display: flex;
               align-items: center;
               justify-content: center;
               flex-shrink: 0;
             }
             .custom-infowindow-icon-inner {
-              width: 12px; /* Larger inner circle */
+              width: 12px;
               height: 12px;
               border-radius: 50%;
               background: white;
             }
             .custom-infowindow-title {
               margin: 0;
-              font-size: 18px; /* Larger title */
-              font-weight: 700; /* Bolder title */
-              color: #212121; /* Even darker for title */
+              font-size: 18px;
+              font-weight: 700;
+              color: #212121;
             }
             .custom-infowindow-category {
               font-size: 13px;
-              color: #757575; /* Softer grey for category */
+              color: #757575;
               margin-top: 2px;
-              display: block; /* Ensure it's on its own line */
+              display: block;
             }
             .custom-infowindow-address {
-              margin: 8px 0; /* More vertical space */
+              margin: 8px 0;
               font-size: 13px;
               color: #555;
               line-height: 1.4;
             }
-            .custom-infowindow-rating {
-              display: flex;
-              align-items: center;
-              gap: 6px; /* Space between stars and number */
-              margin-top: 10px;
-            }
-            .custom-infowindow-stars {
-              color: #FFD700; /* Gold color for stars */
-              font-size: 16px; /* Larger stars */
-            }
-            .custom-infowindow-score {
+            .custom-infowindow-overlap {
+              background: ${isHighlighted ? '#fee2e2' : 'transparent'};
+              border: ${isHighlighted ? '2px solid #dc2626' : 'none'};
+              border-radius: 6px;
+              padding: ${isHighlighted ? '8px' : '0'};
+              margin: ${isHighlighted ? '8px 0' : '0'};
               font-size: 13px;
               font-weight: 600;
-              color: #333;
+              color: ${isHighlighted ? '#dc2626' : '#333'};
             }
           </style>
           <div class="custom-infowindow-content">
@@ -322,10 +347,11 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover }:
               </div>
             </div>
             <p class="custom-infowindow-address">${location.address}</p>
-            <div class="custom-infowindow-rating">
-              <div class="custom-infowindow-stars">★★★★☆</div>
-              <span class="custom-infowindow-score">4.2</span>
-            </div>
+            ${isHighlighted ? `
+              <div class="custom-infowindow-overlap">
+                🔥 이 장소는 ${overlapCount}개의 비디오에서 언급되었습니다!
+              </div>
+            ` : ''}
           </div>
         `,
         disableAutoPan: true,
@@ -430,6 +456,49 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover }:
 
   return (
     <div className="h-full relative bg-gray-100">
+      {/* Search Form Overlay */}
+      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20 w-full max-w-3xl px-4">
+        <form onSubmit={handleSubmit} className="w-full">
+          <div className="relative flex items-center bg-white rounded-2xl border-4 border-black hover:shadow-lg focus-within:shadow-lg transition-all">
+            <div className="flex items-center pl-6 pr-4 text-black">
+              <Link2 className="w-5 h-5" />
+            </div>
+            
+            <Input
+              type="url"
+              placeholder="Paste a YouTube URL to get started..."
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              className="flex-1 border-0 bg-transparent text-lg placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 py-6 text-black"
+            />
+            
+            <div className="flex items-center space-x-2 pr-2">
+              <Button
+                type="submit"
+                disabled={!isValidUrl || isAnalyzing}
+                className={`
+                  bg-black hover:bg-gray-800 text-white rounded-xl font-medium 
+                  disabled:opacity-50 disabled:cursor-not-allowed border-2 border-black
+                  transition-all duration-200 ease-in-out
+                  ${isAnalyzing ? 'px-8 py-3' : 'p-3'} 
+                `}
+              >
+                {isAnalyzing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-4 h-4" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </form>
+      </div>
+
       {/* Map Container */}
       <div className="w-full h-full relative">
         {/* Google Maps Container - React won't touch this */}
@@ -445,6 +514,26 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover }:
             <div className="text-center">
               <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
               <p className="text-sm text-gray-600">Loading Google Maps...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Analyzing overlay */}
+        {isAnalyzing && isMapLoaded && (
+          <div className="absolute inset-0 bg-black/20 flex items-center justify-center pointer-events-none z-30">
+            <div className="text-center bg-white/95 p-8 rounded-2xl shadow-lg border-2 border-black max-w-md">
+              <div className="w-16 h-16 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <h3 className="text-xl font-bold text-black mb-2">Analyzing Video</h3>
+              <p className="text-gray-600 text-sm leading-relaxed mb-4">
+                We're extracting locations from the YouTube video. This may take a moment...
+              </p>
+              <div className="w-full bg-gray-200 rounded-full h-2.5 border-2 border-black">
+                <div 
+                  className="bg-black h-1.5 rounded-full transition-all duration-500 ease-in-out"
+                  style={{ width: `${analysisProgress}%` }}
+                ></div>
+              </div>
+              <p className="text-lg font-bold text-black mt-3">{analysisProgress}%</p>
             </div>
           </div>
         )}
@@ -480,12 +569,12 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover }:
         )}
       </div>
 
-      {/* Empty State */}
-      {locations.length === 0 && isMapLoaded && (
+      {/* Empty State - 분석 중이 아닐 때만 표시 */}
+      {locations.length === 0 && isMapLoaded && !isAnalyzing && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="text-center bg-white/90 p-6 rounded-lg shadow-lg">
-            <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="text-center bg-white/90 p-8 rounded-2xl shadow-lg border-2 border-black max-w-md">
+            <div className="w-20 h-20 bg-black rounded-full flex items-center justify-center mx-auto mb-6">
+              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -500,7 +589,10 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover }:
                 />
               </svg>
             </div>
-            <p className="text-gray-600 text-sm">Select videos to see locations on the map</p>
+            <h3 className="text-xl font-bold text-black mb-2">No videos selected</h3>
+            <p className="text-gray-600 text-sm leading-relaxed">
+              Please select videos from the sidebar to see their locations on the map, or search for a new YouTube URL above.
+            </p>
           </div>
         </div>
       )}

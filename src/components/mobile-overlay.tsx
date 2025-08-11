@@ -11,11 +11,13 @@ interface MobileOverlayProps {
   view: "list" | "details"
   videos: VideoData[]
   selectedVideos: string[]
-  
   onClose: () => void
   onVideoToggle: (videoId: string) => void
   onVideoClick: (video: VideoData) => void
   onBackToList: () => void
+  isAnalyzing?: boolean
+  analyzingVideo?: VideoData | null
+  analysisProgress?: number
 }
 
 export function MobileOverlay({
@@ -23,11 +25,13 @@ export function MobileOverlay({
   view,
   videos,
   selectedVideos,
-  
   onClose,
   onVideoToggle,
   onVideoClick,
   onBackToList,
+  isAnalyzing,
+  analyzingVideo,
+  analysisProgress,
 }: MobileOverlayProps) {
   if (!isOpen) return null
 
@@ -55,6 +59,9 @@ export function MobileOverlay({
                 selectedVideos={selectedVideos}
                 onVideoToggle={onVideoToggle}
                 onVideoClick={onVideoClick}
+                isAnalyzing={isAnalyzing}
+                analyzingVideo={analyzingVideo}
+                analysisProgress={analysisProgress}
               />
             </div>
           </div>
