@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { LandingPage } from "@/components/landing-page"
 import { AuthModal } from "@/components/auth-modal"
 import { MainDashboard } from "@/components/main-dashboard"
-import { SignupPrompt } from "@/components/signup-prompt"
 import { apiClient } from "@/lib/api"
 
 type AppState = 'landing' | 'dashboard'
@@ -14,7 +13,6 @@ export default function Home() {
   const [appState, setAppState] = useState<AppState>('landing')
   const [authMode, setAuthMode] = useState<AuthMode>(null)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [showSignupPrompt, setShowSignupPrompt] = useState(false)
   const [analyzedUrl, setAnalyzedUrl] = useState<string | null>(null)
   const [analyzedLocations, setAnalyzedLocations] = useState<any[]>([])
 
@@ -34,22 +32,20 @@ export default function Home() {
   }, [])
 
   const handleAnalyzeVideo = (url: string, locations: any[] = []) => {
+    // Require login before analyzing video
+    if (!isLoggedIn) {
+      setAuthMode('login')
+      return
+    }
+    
     setAnalyzedUrl(url)
     setAnalyzedLocations(locations)
     setAppState('dashboard')
-    
-    // Show signup prompt after a short delay if user is not logged in
-    if (!isLoggedIn) {
-      setTimeout(() => {
-        setShowSignupPrompt(true)
-      }, 3000)
-    }
   }
 
   const handleAuth = () => {
     setIsLoggedIn(true)
     setAuthMode(null)
-    setShowSignupPrompt(false)
     setAppState('dashboard')
   }
 
@@ -57,12 +53,8 @@ export default function Home() {
     setAuthMode(mode)
   }
 
-  const handleSignupFromPrompt = () => {
-    setShowSignupPrompt(false)
-    setAuthMode('signup')
-  }
 
-  if (appState === 'dashboard') {
+  if (appState === 'dashboard' && isLoggedIn) {
     return (
       <>
         <MainDashboard 
@@ -70,14 +62,6 @@ export default function Home() {
           initialLocations={analyzedLocations}
           onShowAuth={handleShowAuth}
         />
-        
-        {/* Signup Prompt for non-logged-in users */}
-        {showSignupPrompt && !isLoggedIn && (
-          <SignupPrompt
-            onSignup={handleSignupFromPrompt}
-            onDismiss={() => setShowSignupPrompt(false)}
-          />
-        )}
         
         {/* Auth Modal */}
         {authMode && (

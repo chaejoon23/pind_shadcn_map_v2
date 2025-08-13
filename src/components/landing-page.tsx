@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { MapPin, Clock, Search, Play, Link2, Bookmark } from 'lucide-react'
 import { apiClient } from "@/lib/api"
+import type { LocationData } from "@/components/main-dashboard"
 
 interface LandingPageProps {
-  onAnalyzeVideo: (url: string, locations?: any[]) => void
+  onAnalyzeVideo: (url: string, locations?: LocationData[]) => void
   onShowAuth: (mode: 'login' | 'signup') => void
 }
 
@@ -38,6 +39,15 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth }: LandingPageProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!videoUrl.trim()) return
+
+    // Check if user is logged in before allowing analysis
+    if (!isLoggedIn) {
+      setError("서비스를 사용하려면 먼저 로그인해주세요.")
+      setTimeout(() => {
+        onShowAuth('login')
+      }, 1000)
+      return
+    }
 
     setIsAnalyzing(true)
     setError("")
@@ -86,7 +96,7 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth }: LandingPageProps) {
           <span className="text-xl font-bold text-black">Pind</span>
         </div>
         
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2">
           {isLoggedIn ? (
             <div className="flex items-center space-x-3">
               <span className="text-black font-medium">{userEmail?.split('@')[0]}</span>
@@ -107,7 +117,7 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth }: LandingPageProps) {
               <Button 
                 variant="ghost" 
                 onClick={() => onShowAuth('login')}
-                className="text-black hover:bg-gray-100 border-2 border-transparent hover:border-black"
+                className="text-black hover:bg-gray-100 border-2 border-transparent hover:border-black mt-2"
               >
                 Log In
               </Button>

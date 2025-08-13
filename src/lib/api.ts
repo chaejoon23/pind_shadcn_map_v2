@@ -24,6 +24,17 @@ export interface ApiPlace {
   lng: number | null;
 }
 
+export interface VideoInfo {
+  id: string;
+  title: string;
+  thumbnail: string;
+}
+
+export interface PlacesWithVideoResponse {
+  video: VideoInfo;
+  places: ApiPlace[];
+}
+
 export interface ApiResponse {
   mode: 'db' | 'new';
   places: ApiPlace[];
@@ -66,7 +77,7 @@ class ApiClient {
     const url = `${this.baseUrl}${endpoint}`;
     console.log('API 요청:', url, options);
     
-    const defaultHeaders = {
+    const defaultHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
     };
 
@@ -95,9 +106,7 @@ class ApiClient {
   }
 
   async processYouTubeURL(url: string, withAuth = false): Promise<ApiResponse> {
-    const endpoint = withAuth 
-      ? '/api/v1/youtube/process'
-      : '/api/v1/youtube/without-login/process';
+    const endpoint = '/api/v1/youtube/process';
     
     return this.makeRequest<ApiResponse>(endpoint, {
       method: 'POST',
@@ -105,13 +114,15 @@ class ApiClient {
     });
   }
 
-  async getUserHistory(): Promise<string[]> {
-    return this.makeRequest<string[]>('/api/v1/youtube/history');
+  async getUserHistory(): Promise<VideoData[]> {
+    return this.makeRequest<VideoData[]>('/api/v1/users/history');
   }
 
-  async getPlacesForVideo(videoId: string): Promise<ApiPlace[]> {
-    return this.makeRequest<ApiPlace[]>(`/api/v1/youtube/places/${videoId}`);
+
+  async getPlacesForVideo(videoId: string): Promise<PlacesWithVideoResponse> {
+    return this.makeRequest<PlacesWithVideoResponse>(`/api/v1/youtube/places/${videoId}`);
   }
+
 
   // API 응답을 앱에서 사용하는 형식으로 변환
   convertApiPlacesToLocations(places: ApiPlace[], videoId: string): LocationData[] {
@@ -131,6 +142,25 @@ class ApiClient {
         videoId: videoId
       }
     });
+  }
+
+  async getVideoFromDB(videoId: string): Promise<{id: string; title: string; thumbnail: string} | null> {
+    try {
+      return this.makeRequest<{id: string; title: string; thumbnail: string}>(`/api/v1/youtube/video/${videoId}`);
+    } catch (error) {
+      console.error('DB에서 비디오 정보 가져오기 실패:', error);
+      return null;
+    }
+  }
+
+  convertPlacesResponseToVideoData(response: PlacesWithVideoResponse): VideoData {
+    return {
+      id: response.video.id,
+      title: response.video.title,
+      thumbnail: response.video.thumbnail,
+      date: new Date().toISOString(),
+      locations: this.convertApiPlacesToLocations(response.places, response.video.id)
+    };
   }
 
   // YouTube URL에서 비디오 ID 추출
@@ -192,81 +222,6 @@ class ApiClient {
     return sessionStorage.getItem('user_email');
   }
 
-  // YouTube oEmbed API를 사용하여 비디오 정보 가져오기 (API 키 불필요)
-  async getYouTubeVideoInfo(videoId: string): Promise<{title: string; thumbnail: string} | null> {
-    try {
-      console.log('YouTube oEmbed API 호출 시작 - videoId:', videoId);
-      
-      // YouTube oEmbed API 사용 (API 키 불필요)
-      const url = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-      console.log('YouTube oEmbed URL:', url);
-      
-      const response = await fetch(url);
-      console.log('YouTube oEmbed 응답 상태:', response.status, response.statusText);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('YouTube oEmbed 오류 응답:', response.status, errorText);
-        return null;
-      }
-
-      const data = await response.json();
-      console.log('YouTube oEmbed 응답 데이터:', data);
-      
-      if (data.title) {
-        console.log('비디오 정보 추출 성공:', data.title);
-        return {
-          title: data.title,
-          thumbnail: data.thumbnail_url || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
-        };
-      }
-      
-      console.warn('YouTube oEmbed 응답에 제목이 없습니다.');
-      return null;
-    } catch (error) {
-      console.error('YouTube oEmbed API 호출 중 오류:', error);
-      
-      // oEmbed 실패 시 YouTube Data API 시도
-      return this.getYouTubeVideoInfoWithDataAPI(videoId);
-    }
-  }
-
-  // 백업용 YouTube Data API (Google API 키 필요)
-  private async getYouTubeVideoInfoWithDataAPI(videoId: string): Promise<{title: string; thumbnail: string} | null> {
-    try {
-      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-      console.log('YouTube Data API 백업 호출 - API 키 존재:', !!apiKey);
-      
-      if (!apiKey) {
-        console.warn('Google API 키가 없어서 기본 제목을 사용합니다.');
-        return null;
-      }
-
-      const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${apiKey}`;
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('YouTube Data API 오류:', response.status, errorText);
-        return null;
-      }
-
-      const data = await response.json();
-      
-      if (data.items && data.items.length > 0) {
-        const video = data.items[0];
-        return {
-          title: video.snippet.title,
-          thumbnail: video.snippet.thumbnails.medium?.url || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
-        };
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('YouTube Data API 백업 호출 중 오류:', error);
-      return null;
-    }
-  }
 }
 
 export const apiClient = new ApiClient();

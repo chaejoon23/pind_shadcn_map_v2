@@ -41,6 +41,13 @@ interface MainDashboardProps {
 }
 
 export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }: MainDashboardProps) {
+  // Authentication check - redirect if not authenticated
+  useEffect(() => {
+    if (!apiClient.isAuthenticated()) {
+      onShowAuth?.('login')
+      return
+    }
+  }, [])
   const [selectedVideos, setSelectedVideos] = useState<string[]>([])
   
   const [showMobileOverlay, setShowMobileOverlay] = useState(false)
@@ -74,37 +81,13 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
         // 로그인 사용자: 히스토리 불러오기
         try {
           console.log('로그인한 사용자의 히스토리 불러오기 시작')
-          const historyIds = await apiClient.getUserHistory()
-          console.log('히스토리 ID 목록:', historyIds)
-          
-          // 각 video ID에 대한 상세 정보 불러오기
-          const historyVideos: VideoData[] = []
-          for (const videoId of historyIds) {
-            try {
-              const places = await apiClient.getPlacesForVideo(videoId)
-              const locations = apiClient.convertApiPlacesToLocations(places, videoId)
-              
-              // YouTube 비디오 정보 가져오기
-              const videoInfo = await apiClient.getYouTubeVideoInfo(videoId)
-              
-              const videoData: VideoData = {
-                id: videoId,
-                title: videoInfo?.title || `YouTube Video - ${videoId}`,
-                thumbnail: videoInfo?.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
-                date: new Date().toISOString().split('T')[0],
-                locations
-              }
-              historyVideos.push(videoData)
-            } catch (error) {
-              console.error(`비디오 ${videoId} 정보 불러오기 실패:`, error)
-            }
-          }
+          const historyVideos = await apiClient.getUserHistory()
+          console.log('히스토리 불러오기 완료:', historyVideos.length, '개 비디오')
           
           // 히스토리를 최신 순으로 정렬 (가장 최근에 추가된 것이 맨 앞에)
           historyVideos.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
           
           setMockVideos(historyVideos)
-          console.log('히스토리 불러오기 완료:', historyVideos.length, '개 비디오')
         } catch (error) {
           console.error('사용자 히스토리 불러오기 실패:', error)
         }
@@ -125,13 +108,10 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
         console.log('초기 URL과 위치 데이터 처리:', initialUrl, initialLocations)
         const videoId = apiClient.extractVideoId(initialUrl) || 'unknown'
         
-        // YouTube 비디오 정보 가져오기
-        const videoInfo = await apiClient.getYouTubeVideoInfo(videoId)
-        
         const newVideo: VideoData = {
           id: videoId,
-          title: videoInfo?.title || `YouTube Video - ${videoId}`,
-          thumbnail: videoInfo?.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+          title: `YouTube Video - ${videoId}`,
+          thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
           date: new Date().toISOString().split('T')[0],
           locations: initialLocations
         }
@@ -173,13 +153,10 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
           const locations = apiClient.convertApiPlacesToLocations(response.places, videoId)
           
           if (videoId && locations.length > 0) {
-            // YouTube 비디오 정보 가져오기
-            const videoInfo = await apiClient.getYouTubeVideoInfo(videoId)
-            
             const newVideo: VideoData = {
               id: videoId,
-              title: videoInfo?.title || `YouTube Video - ${videoId}`,
-              thumbnail: videoInfo?.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+              title: `YouTube Video - ${videoId}`,
+              thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
               date: new Date().toISOString().split('T')[0],
               locations
             }
@@ -295,16 +272,6 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     }, 800)
     
     try {
-      const videoInfo = await apiClient.getYouTubeVideoInfo(videoId)
-      if (videoInfo?.title) {
-        videoDataForAnalysis = { 
-          ...videoDataForAnalysis, 
-          title: videoInfo.title, 
-          thumbnail: videoInfo.thumbnail || videoDataForAnalysis.thumbnail 
-        }
-        setAnalyzingVideo(videoDataForAnalysis)
-      }
-      
       const response = await apiClient.processYouTubeURL(url, currentlyLoggedIn)
       const locations = apiClient.convertApiPlacesToLocations(response.places, videoId)
       
