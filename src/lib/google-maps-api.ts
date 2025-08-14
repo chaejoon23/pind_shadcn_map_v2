@@ -412,7 +412,7 @@ export const initializeGoogleAPIs = (): Promise<void> => {
           // Only initialize if we have proper client ID
           const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
           if (!clientId) {
-            console.log("Google Client ID not provided - export features disabled")
+            // Silently disable export features when client ID is not provided
             isGapiLoading = false
             resolve()
             return

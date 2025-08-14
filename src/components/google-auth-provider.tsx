@@ -44,7 +44,8 @@ export function GoogleAuthProvider({ children }: { children: ReactNode }) {
             })
           }
         } else {
-          console.log("Google Client ID not provided - auth features disabled, maps will work")
+          // Silently disable Google Auth features when client ID is not provided
+          // Maps will still work with just the API key
         }
 
         setIsInitialized(true)

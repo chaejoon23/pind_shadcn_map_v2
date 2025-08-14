@@ -38,6 +38,8 @@ export interface PlacesWithVideoResponse {
 export interface ApiResponse {
   mode: 'db' | 'new';
   places: ApiPlace[];
+  video_title?: string;
+  video_thumbnail?: string;
 }
 
 export interface JobResponse {
@@ -55,8 +57,22 @@ export interface JobResultResponse {
   job_id: string;
   status: string;
   places: ApiPlace[];
+  video_title?: string;
+  video_thumbnail?: string;
   processing_time?: number;
   error_message?: string;
+}
+
+export interface UserHistoryItem {
+  id: string;
+  title?: string;
+  thumbnail_url?: string;
+  created_at: string;
+  places?: Array<{
+    name?: string;
+    lat?: number;
+    lng?: number;
+  }>;
 }
 
 export interface URLRequest {
@@ -120,7 +136,11 @@ class ApiClient {
     return response.json();
   }
 
-  async processYouTubeURL(url: string, withAuth = false): Promise<ApiResponse> {
+  async processYouTubeURL(
+    url: string, 
+    withAuth = false, 
+    onProgressUpdate?: (progress: number, currentStep: string) => void
+  ): Promise<ApiResponse> {
     
     // Step 1: Submit job
     const jobResponse = await this.makeRequest<JobResponse>('/api/v1/youtube/process', {
@@ -129,43 +149,61 @@ class ApiClient {
     });
 
     // Step 2: Poll for completion
-    return this.pollForJobCompletion(jobResponse.job_id);
+    return this.pollForJobCompletion(jobResponse.job_id, onProgressUpdate);
   }
 
-  private async pollForJobCompletion(jobId: string): Promise<ApiResponse> {
-    const maxAttempts = 60; // 60초 최대 대기
+  private async pollForJobCompletion(
+    jobId: string, 
+    onProgressUpdate?: (progress: number, currentStep: string) => void
+  ): Promise<ApiResponse> {
     const pollInterval = 1000; // 1초마다 체크
 
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    while (true) {
       try {
         const statusResponse = await this.makeRequest<JobStatusResponse>(`/api/v1/jobs/${jobId}/status`);
+        
+        // Update progress callback if provided
+        if (onProgressUpdate) {
+          onProgressUpdate(statusResponse.progress, statusResponse.current_step);
+        }
         
         if (statusResponse.status === 'SUCCESS') {
           const resultResponse = await this.makeRequest<JobResultResponse>(`/api/v1/jobs/${jobId}/result`);
           return {
             mode: 'new',
-            places: resultResponse.places || []
+            places: resultResponse.places || [],
+            video_title: resultResponse.video_title,
+            video_thumbnail: resultResponse.video_thumbnail
           };
         } else if (statusResponse.status === 'FAILURE') {
-          throw new Error(`작업 처리 실패: ${statusResponse.current_step || '알 수 없는 오류'}`);
+          // Get detailed error from result endpoint
+          try {
+            const resultResponse = await this.makeRequest<JobResultResponse>(`/api/v1/jobs/${jobId}/result`);
+            const errorMessage = resultResponse.error_message || statusResponse.current_step || '알 수 없는 오류';
+            throw new Error(`작업 처리 실패: ${errorMessage}`);
+          } catch (resultError) {
+            throw new Error(`작업 처리 실패: ${statusResponse.current_step || '알 수 없는 오류'}`);
+          }
         }
 
         // Still processing, wait and try again
         await new Promise(resolve => setTimeout(resolve, pollInterval));
       } catch (error) {
-        if (attempt === maxAttempts - 1) {
-          throw new Error(`작업 처리 중 오류가 발생했습니다: ${error instanceof Error ? error.message : String(error)}`);
+        // If it's a network error or API error, continue polling
+        // Only throw for actual job failures
+        if (error instanceof Error && error.message.includes('작업 처리 실패')) {
+          throw error;
         }
-        // Continue to next attempt for non-final attempts
-        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        
+        // For network errors, wait a bit longer and retry
+        console.log('Network error during polling, retrying...', error);
+        await new Promise(resolve => setTimeout(resolve, pollInterval * 2));
       }
     }
-
-    throw new Error('작업 처리 시간이 초과되었습니다.');
   }
 
   async getUserHistory(): Promise<VideoData[]> {
-    const historyData = await this.makeRequest<any[]>('/api/v1/users/history');
+    const historyData = await this.makeRequest<UserHistoryItem[]>('/api/v1/users/history');
     
     // 백엔드 응답을 VideoData 형태로 변환
     return historyData.map((item) => {
@@ -179,7 +217,7 @@ class ApiClient {
         title: title,
         thumbnail: item.thumbnail_url || `https://img.youtube.com/vi/${item.id}/mqdefault.jpg`,
         date: new Date(item.created_at).toISOString().split('T')[0],
-        locations: (item.places || []).map((place: any, index: number) => ({
+        locations: (item.places || []).map((place, index: number) => ({
           id: `place-${index}`,
           name: place.name || 'Unknown Place',
           address: '',

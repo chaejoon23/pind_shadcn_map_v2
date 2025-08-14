@@ -19,9 +19,10 @@ interface HistorySidebarProps {
   isAnalyzing?: boolean
   analyzingVideo?: VideoData | null
   analysisProgress?: number
+  currentStep?: string
 }
 
-export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoClick, onNavigateHome, onShowAuth, isAnalyzing, analyzingVideo, analysisProgress }: HistorySidebarProps) {
+export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoClick, onNavigateHome, onShowAuth, isAnalyzing, analyzingVideo, analysisProgress, currentStep }: HistorySidebarProps) {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
 
@@ -107,6 +108,13 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
                   </h3>
                   <div className="text-xs mt-1 font-medium text-gray-600">
                     <p>Analyzing... {analysisProgress}%</p>
+                    {currentStep && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {analysisProgress <= 25 ? 'Sending...' :
+                         analysisProgress <= 75 ? 'Analyzing...' :
+                         analysisProgress <= 95 ? 'Marking on map...' : 'Completed'}
+                      </p>
+                    )}
                     <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
                       <div 
                         className="bg-gray-500 h-1.5 rounded-full transition-all duration-500 ease-in-out"
@@ -234,6 +242,13 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
                 </h3>
                 <div className="text-xs mt-1 font-medium text-gray-600">
                   <p>Analyzing... {analysisProgress}%</p>
+                  {currentStep && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {analysisProgress <= 25 ? 'Sending...' :
+                       analysisProgress <= 75 ? 'Analyzing...' :
+                       analysisProgress <= 95 ? 'Marking on map...' : 'Completed'}
+                    </p>
+                  )}
                   <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
                     <div 
                       className="bg-gray-500 h-1.5 rounded-full transition-all duration-500 ease-in-out"

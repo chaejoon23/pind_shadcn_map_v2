@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { MainDashboard } from "@/components/main-dashboard"
 import { AuthModal } from "@/components/auth-modal"
 import { apiClient } from "@/lib/api"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 
 type AuthMode = 'login' | 'signup' | null
 
@@ -12,6 +12,8 @@ export default function DashboardPage() {
   const [authMode, setAuthMode] = useState<AuthMode>(null)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const initialUrl = searchParams.get('url')
 
   // 컴포넌트 마운트 시 인증 상태 확인
   useEffect(() => {
@@ -47,6 +49,7 @@ export default function DashboardPage() {
   return (
     <>
       <MainDashboard 
+        initialUrl={initialUrl}
         onShowAuth={handleShowAuth}
       />
       

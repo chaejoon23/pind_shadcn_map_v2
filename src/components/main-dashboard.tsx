@@ -55,7 +55,10 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
   const [isAnalyzing, setIsAnalyzing] = useState(false) // URL 분석 상태
   const [analyzingVideo, setAnalyzingVideo] = useState<VideoData | null>(null) // 현재 분석 중인 비디오
   const [analysisProgress, setAnalysisProgress] = useState(0)
+  const [currentStep, setCurrentStep] = useState('')
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const initialUrlProcessed = useRef(false)
+  const [initializationComplete, setInitializationComplete] = useState(false)
 
   // 컴포넌트 마운트 시 인증 상태 확인 및 히스토리 불러오기
   useEffect(() => {
@@ -90,12 +93,14 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
       }
     }
     
-    initializeData()
+    initializeData().then(() => {
+      setInitializationComplete(true)
+    })
   }, [])
 
   // Process initial URL and locations when component mounts
   useEffect(() => {
-    if (initialUrl && initialLocations) {
+    if (initializationComplete && initialUrl && initialLocations && !initialUrlProcessed.current) {
       const processInitialData = async () => {
         const videoId = apiClient.extractVideoId(initialUrl) || 'unknown'
         
@@ -129,13 +134,15 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
           setMockVideos([newVideo])
         }
         setSelectedVideos([videoId])
+        initialUrlProcessed.current = true // 성공 시에만 플래그 설정
       }
       
       processInitialData()
-    } else if (initialUrl) {
+    } else if (initializationComplete && initialUrl && !initialUrlProcessed.current) {
       const processInitialUrl = async () => {
         try {
-          const response = await apiClient.processYouTubeURL(initialUrl, isLoggedIn)
+          const currentlyLoggedIn = apiClient.isAuthenticated()
+          const response = await apiClient.processYouTubeURL(initialUrl, currentlyLoggedIn)
           const videoId = apiClient.extractVideoId(initialUrl) || 'unknown'
           const locations = apiClient.convertApiPlacesToLocations(response.places, videoId)
           
@@ -148,7 +155,7 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
               locations
             }
             
-            if (isLoggedIn) {
+            if (currentlyLoggedIn) {
               // 로그인 사용자: 히스토리에 추가
               setMockVideos(prev => [newVideo, ...prev])
             } else {
@@ -157,14 +164,16 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
               setMockVideos([newVideo])
             }
             setSelectedVideos([videoId])
+            initialUrlProcessed.current = true // 성공 시에만 플래그 설정
           }
         } catch (error) {
-          alert(`오류 발생: ${error}`)
+          console.error('Initial URL processing failed:', error)
+          // 실패 시 플래그를 설정하지 않아서 재시도 가능
         }
       }
       processInitialUrl()
     }
-  }, [initialUrl, initialLocations, isLoggedIn])
+  }, [initializationComplete, initialUrl, initialLocations])
 
   // Auto-select the most recently requested video when videos are loaded
   useEffect(() => {
@@ -229,9 +238,10 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     const currentlyLoggedIn = apiClient.isAuthenticated()
     const videoId = apiClient.extractVideoId(url) || 'unknown'
     
+    
     let videoDataForAnalysis: VideoData = {
       id: videoId,
-      title: `YouTube Video - ${videoId}`,
+      title: `YouTube Video - ${videoId}`, // 임시 제목, 나중에 업데이트
       thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
       date: new Date().toISOString().split('T')[0],
       locations: []
@@ -241,23 +251,45 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     setSelectedVideos([])
     setIsAnalyzing(true)
     setAnalysisProgress(0)
-
-    progressIntervalRef.current = setInterval(() => {
-      setAnalysisProgress(prev => {
-        if (prev >= 95) {
-          if (progressIntervalRef.current) clearInterval(progressIntervalRef.current)
-          return 95
-        }
-        return prev + 5
-      })
-    }, 800)
+    setCurrentStep('')
+    
+    // 클라이언트에서는 기본 제목 사용, 서버 응답에서 실제 제목 받아옴
     
     try {
-      const response = await apiClient.processYouTubeURL(url, currentlyLoggedIn)
+      const response = await apiClient.processYouTubeURL(
+        url, 
+        currentlyLoggedIn,
+        (progress, step) => {
+          setAnalysisProgress(progress)
+          setCurrentStep(step)
+        }
+      )
+      
+      // console.log('Server response:', response) // 서버 응답 확인용 로그 (필요시 주석 해제)
+      
       const locations = apiClient.convertApiPlacesToLocations(response.places, videoId)
+      
+      // 서버에서 video_title을 제공하지 않는 경우, 클라이언트에서 제목을 가져옴
+      let finalTitle = response.video_title || videoDataForAnalysis.title
+      
+      // 서버에서 제목이 없으면 YouTube oEmbed API를 통해 제목 시도 (프록시 없이)
+      if (!response.video_title || response.video_title === 'undefined') {
+        try {
+          // YouTube oEmbed API를 직접 호출 시도 (일부 브라우저에서는 작동할 수 있음)
+          const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
+          if (oembedResponse.ok) {
+            const oembedData = await oembedResponse.json()
+            finalTitle = oembedData.title || finalTitle
+          }
+        } catch (error) {
+          // CORS 오류 무시하고 기본 제목 유지 (정상적인 동작)
+        }
+      }
       
       const finalVideo: VideoData = {
         ...videoDataForAnalysis,
+        title: finalTitle,
+        thumbnail: response.video_thumbnail || videoDataForAnalysis.thumbnail,
         locations
       }
       
@@ -289,15 +321,19 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
       
       setSelectedVideos([videoId])
     } catch (error) {
-      alert(`오류 발생: ${error}`)
+      console.error('Video processing error:', error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      alert(`비디오 분석 중 오류가 발생했습니다.\n\n오류 내용: ${errorMessage}\n\n백엔드 서버와 Celery Worker가 정상 실행 중인지 확인해주세요.`)
     } finally {
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current)
       }
       setAnalysisProgress(100)
+      setCurrentStep('완료')
       setTimeout(() => {
         setIsAnalyzing(false)
         setAnalyzingVideo(null)
+        setCurrentStep('')
       }, 1000)
     }
   }
@@ -351,6 +387,7 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
             isAnalyzing={isAnalyzing}
             analyzingVideo={analyzingVideo}
             analysisProgress={analysisProgress}
+            currentStep={currentStep}
           />
         </div>
 
@@ -417,6 +454,7 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
           isAnalyzing={isAnalyzing}
           analyzingVideo={analyzingVideo}
           analysisProgress={analysisProgress}
+          currentStep={currentStep}
         />
       </div>
     </div>

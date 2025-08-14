@@ -30,8 +30,9 @@ export default function Home() {
       return
     }
     
-    // YouTube URL 분석 후 대시보드로 이동
-    router.push('/dashboard')
+    // YouTube URL을 매개변수로 전달하여 대시보드로 이동
+    const encodedUrl = encodeURIComponent(url)
+    router.push(`/dashboard?url=${encodedUrl}`)
   }
 
   const handleAuth = () => {

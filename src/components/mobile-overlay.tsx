@@ -18,6 +18,7 @@ interface MobileOverlayProps {
   isAnalyzing?: boolean
   analyzingVideo?: VideoData | null
   analysisProgress?: number
+  currentStep?: string
 }
 
 export function MobileOverlay({
@@ -32,6 +33,7 @@ export function MobileOverlay({
   isAnalyzing,
   analyzingVideo,
   analysisProgress,
+  currentStep,
 }: MobileOverlayProps) {
   if (!isOpen) return null
 
@@ -62,6 +64,7 @@ export function MobileOverlay({
                 isAnalyzing={isAnalyzing}
                 analyzingVideo={analyzingVideo}
                 analysisProgress={analysisProgress}
+                currentStep={currentStep}
               />
             </div>
           </div>

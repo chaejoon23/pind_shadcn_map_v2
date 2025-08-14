@@ -264,6 +264,24 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
       // Find the video title for this location
       const video = videos.find(v => v.id === location.videoId)
       const videoTitle = video ? video.title : `YouTube Video - ${location.videoId}`
+      
+      // For overlapping locations, find all videos that mention this location
+      let overlapVideos: string[] = []
+      if (isHighlighted && overlapCount > 1) {
+        // Find all locations with similar coordinates
+        const similarLocations = locations.filter(loc => 
+          loc.coordinates &&
+          Math.abs(loc.coordinates.lat - location.coordinates.lat) < 0.001 &&
+          Math.abs(loc.coordinates.lng - location.coordinates.lng) < 0.001
+        )
+        
+        // Get unique video titles for these locations
+        const uniqueVideoIds = [...new Set(similarLocations.map(loc => loc.videoId))]
+        overlapVideos = uniqueVideoIds.map(videoId => {
+          const vid = videos.find(v => v.id === videoId)
+          return vid ? vid.title : `YouTube Video - ${videoId}`
+        }).filter(Boolean)
+      }
 
       // Create InfoWindow for this marker
       const infoWindow = new window.google.maps.InfoWindow({
@@ -371,17 +389,23 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
               </div>
             </div>
             <p class="custom-infowindow-address">${location.address}</p>
-            <div class="custom-infowindow-video">
-              <svg class="custom-infowindow-youtube-icon" viewBox="0 0 24 24" fill="#FF0000">
-                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-              </svg>
-              <span class="custom-infowindow-video-title">${videoTitle}</span>
-            </div>
-            ${isHighlighted ? `
-              <div class="custom-infowindow-overlap">
-                🔥 이 장소는 ${overlapCount}개의 비디오에서 언급되었습니다!
+            ${isHighlighted && overlapVideos.length > 1 ? `
+              ${overlapVideos.map(title => `
+                <div class="custom-infowindow-video">
+                  <svg class="custom-infowindow-youtube-icon" viewBox="0 0 24 24" fill="#FF0000">
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                  </svg>
+                  <span class="custom-infowindow-video-title">${title}</span>
+                </div>
+              `).join('')}
+            ` : `
+              <div class="custom-infowindow-video">
+                <svg class="custom-infowindow-youtube-icon" viewBox="0 0 24 24" fill="#FF0000">
+                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                </svg>
+                <span class="custom-infowindow-video-title">${videoTitle}</span>
               </div>
-            ` : ''}
+            `}
           </div>
         `,
         disableAutoPan: true,
