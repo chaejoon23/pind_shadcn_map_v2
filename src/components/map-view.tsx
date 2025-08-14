@@ -21,11 +21,13 @@ interface MapViewProps {
   onPinClick: (location: LocationData) => void
   onPinHover?: (location: LocationData | null) => void
   onProcessUrl?: (url: string) => void
+  onNavigateHome?: () => void
   isAnalyzing?: boolean
   analysisProgress?: number
+  videos?: Array<{ id: string; title: string; thumbnail: string }>
 }
 
-export function MapView({ locations, selectedLocation, onPinClick, onPinHover, onProcessUrl, isAnalyzing, analysisProgress }: MapViewProps) {
+export function MapView({ locations, selectedLocation, onPinClick, onPinHover, onProcessUrl, onNavigateHome, isAnalyzing, analysisProgress, videos = [] }: MapViewProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [hoveredLocation, setHoveredLocation] = useState<LocationData | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null)
@@ -50,7 +52,7 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
       // 검색 완료 후 입력창 비우기
       setVideoUrl("")
     } catch (error) {
-      console.error('URL 처리 중 오류:', error)
+      // URL 처리 오류 발생
     }
   }
 
@@ -162,9 +164,7 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
           }
         }
       } catch (error) {
-        if (isMounted) {
-          console.error("Failed to initialize Google Maps:", error)
-        }
+        // Google Maps 초기화 실패
       }
     }
 
@@ -261,6 +261,10 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
         }
       })
 
+      // Find the video title for this location
+      const video = videos.find(v => v.id === location.videoId)
+      const videoTitle = video ? video.title : `YouTube Video - ${location.videoId}`
+
       // Create InfoWindow for this marker
       const infoWindow = new window.google.maps.InfoWindow({
         content: `
@@ -294,18 +298,10 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
             .custom-infowindow-icon {
               width: 36px;
               height: 36px;
-              border-radius: 50%;
-              background: ${isHighlighted ? '#dc2626' : '#4285F4'};
               display: flex;
               align-items: center;
               justify-content: center;
               flex-shrink: 0;
-            }
-            .custom-infowindow-icon-inner {
-              width: 12px;
-              height: 12px;
-              border-radius: 50%;
-              background: white;
             }
             .custom-infowindow-title {
               margin: 0;
@@ -325,6 +321,31 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
               color: #555;
               line-height: 1.4;
             }
+            .custom-infowindow-video {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              margin: 8px 0;
+              padding: 8px;
+              background: #f8f9fa;
+              border-radius: 6px;
+              border: 1px solid #e9ecef;
+            }
+            .custom-infowindow-youtube-icon {
+              width: 20px;
+              height: 20px;
+              flex-shrink: 0;
+            }
+            .custom-infowindow-video-title {
+              font-size: 12px;
+              color: #666;
+              font-weight: 500;
+              line-height: 1.3;
+              overflow: hidden;
+              display: -webkit-box;
+              -webkit-line-clamp: 2;
+              -webkit-box-orient: vertical;
+            }
             .custom-infowindow-overlap {
               background: ${isHighlighted ? '#fee2e2' : 'transparent'};
               border: ${isHighlighted ? '2px solid #dc2626' : 'none'};
@@ -339,7 +360,10 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
           <div class="custom-infowindow-content">
             <div class="custom-infowindow-header">
               <div class="custom-infowindow-icon">
-                <div class="custom-infowindow-icon-inner"></div>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                  <circle cx="12" cy="10" r="3"/>
+                </svg>
               </div>
               <div style="flex: 1; min-width: 0;">
                 <h4 class="custom-infowindow-title">${location.name}</h4>
@@ -347,6 +371,12 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
               </div>
             </div>
             <p class="custom-infowindow-address">${location.address}</p>
+            <div class="custom-infowindow-video">
+              <svg class="custom-infowindow-youtube-icon" viewBox="0 0 24 24" fill="#FF0000">
+                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+              </svg>
+              <span class="custom-infowindow-video-title">${videoTitle}</span>
+            </div>
             ${isHighlighted ? `
               <div class="custom-infowindow-overlap">
                 🔥 이 장소는 ${overlapCount}개의 비디오에서 언급되었습니다!
@@ -363,6 +393,9 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
       // Add click event
       marker.addListener('click', () => {
         onPinClick(location)
+        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.name)}`
+        console.log('Opening Google Maps URL:', googleMapsUrl)
+        window.open(googleMapsUrl, '_blank')
       })
 
       // Add mouseover event for hover effect
@@ -538,14 +571,22 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
           </div>
         )}
 
-        {/* Custom Info Window for Google Maps */}
+        {/* Hover Info Window */}
         {hoveredLocation && isMapLoaded && (
-          <div className="fixed z-50 pointer-events-none">
-            <div className="bg-white rounded-lg shadow-lg border p-3 max-w-xs animate-in fade-in-0 zoom-in-95 duration-150">
+          <div className="fixed z-50 pointer-events-auto">
+            <div 
+              className="bg-white rounded-lg shadow-lg border p-3 max-w-xs animate-in fade-in-0 zoom-in-95 duration-150 cursor-pointer hover:shadow-xl transition-all"
+              onClick={() => {
+                const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hoveredLocation.name)}`
+                console.log('Opening Google Maps URL:', googleMapsUrl)
+                window.open(googleMapsUrl, '_blank')
+              }}
+            >
               <div className="flex items-start space-x-2">
-                <div className="w-6 h-6 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                <div className="w-6 h-6 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                    <circle cx="12" cy="10" r="3"/>
                   </svg>
                 </div>
                 <div className="min-w-0">
@@ -567,6 +608,7 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
             </div>
           </div>
         )}
+
       </div>
 
       {/* Empty State - 분석 중이 아닐 때만 표시 */}

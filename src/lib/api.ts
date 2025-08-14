@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://192.168.18.124:9000';
 
 export interface LocationData {
   id: string;
@@ -40,6 +40,25 @@ export interface ApiResponse {
   places: ApiPlace[];
 }
 
+export interface JobResponse {
+  job_id: string;
+}
+
+export interface JobStatusResponse {
+  job_id: string;
+  status: string;
+  progress: number;
+  current_step: string;
+}
+
+export interface JobResultResponse {
+  job_id: string;
+  status: string;
+  places: ApiPlace[];
+  processing_time?: number;
+  error_message?: string;
+}
+
 export interface URLRequest {
   url: string;
 }
@@ -75,7 +94,6 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    console.log('API 요청:', url, options);
     
     const defaultHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -86,7 +104,6 @@ class ApiClient {
       defaultHeaders['Authorization'] = `Bearer ${token}`;
     }
 
-    console.log('fetch 호출 시작...')
     const response = await fetch(url, {
       ...options,
       headers: {
@@ -94,11 +111,9 @@ class ApiClient {
         ...options.headers,
       },
     });
-    console.log('응답 상태:', response.status, response.statusText);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('API 오류 응답:', response.status, errorData)
       throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
     }
 
@@ -106,16 +121,78 @@ class ApiClient {
   }
 
   async processYouTubeURL(url: string, withAuth = false): Promise<ApiResponse> {
-    const endpoint = '/api/v1/youtube/process';
     
-    return this.makeRequest<ApiResponse>(endpoint, {
+    // Step 1: Submit job
+    const jobResponse = await this.makeRequest<JobResponse>('/api/v1/youtube/process', {
       method: 'POST',
       body: JSON.stringify({ url }),
     });
+
+    // Step 2: Poll for completion
+    return this.pollForJobCompletion(jobResponse.job_id);
+  }
+
+  private async pollForJobCompletion(jobId: string): Promise<ApiResponse> {
+    const maxAttempts = 60; // 60초 최대 대기
+    const pollInterval = 1000; // 1초마다 체크
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const statusResponse = await this.makeRequest<JobStatusResponse>(`/api/v1/jobs/${jobId}/status`);
+        
+        if (statusResponse.status === 'SUCCESS') {
+          const resultResponse = await this.makeRequest<JobResultResponse>(`/api/v1/jobs/${jobId}/result`);
+          return {
+            mode: 'new',
+            places: resultResponse.places || []
+          };
+        } else if (statusResponse.status === 'FAILURE') {
+          throw new Error(`작업 처리 실패: ${statusResponse.current_step || '알 수 없는 오류'}`);
+        }
+
+        // Still processing, wait and try again
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      } catch (error) {
+        if (attempt === maxAttempts - 1) {
+          throw new Error(`작업 처리 중 오류가 발생했습니다: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        // Continue to next attempt for non-final attempts
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      }
+    }
+
+    throw new Error('작업 처리 시간이 초과되었습니다.');
   }
 
   async getUserHistory(): Promise<VideoData[]> {
-    return this.makeRequest<VideoData[]>('/api/v1/users/history');
+    const historyData = await this.makeRequest<any[]>('/api/v1/users/history');
+    
+    // 백엔드 응답을 VideoData 형태로 변환
+    return historyData.map((item) => {
+      // title이 없거나 빈 문자열인 경우 기본값 사용
+      const title = item.title && item.title.trim() 
+        ? item.title 
+        : `YouTube Video - ${item.id}`;
+      
+      return {
+        id: item.id,
+        title: title,
+        thumbnail: item.thumbnail_url || `https://img.youtube.com/vi/${item.id}/mqdefault.jpg`,
+        date: new Date(item.created_at).toISOString().split('T')[0],
+        locations: (item.places || []).map((place: any, index: number) => ({
+          id: `place-${index}`,
+          name: place.name || 'Unknown Place',
+          address: '',
+          category: '',
+          description: '',
+          coordinates: {
+            lat: place.lat || 0,
+            lng: place.lng || 0
+          },
+          videoId: item.id
+        }))
+      };
+    });
   }
 
 
@@ -126,15 +203,13 @@ class ApiClient {
 
   // API 응답을 앱에서 사용하는 형식으로 변환
   convertApiPlacesToLocations(places: ApiPlace[], videoId: string): LocationData[] {
-    console.log('변환할 places 데이터:', places)
     return places.map((place, index) => {
-      console.log(`Place ${index}:`, place)
       return {
         id: `place-${index}`,
         name: place.name || 'Unknown Place',
-        address: '', // 서버에서 주소 정보를 제공하지 않음
-        category: 'Place', // 기본 카테고리
-        description: '', // 서버에서 설명을 제공하지 않음
+        address: '',
+        category: '',
+        description: '',
         coordinates: {
           lat: place.lat || 0,
           lng: place.lng || 0
@@ -148,7 +223,6 @@ class ApiClient {
     try {
       return this.makeRequest<{id: string; title: string; thumbnail: string}>(`/api/v1/youtube/video/${videoId}`);
     } catch (error) {
-      console.error('DB에서 비디오 정보 가져오기 실패:', error);
       return null;
     }
   }

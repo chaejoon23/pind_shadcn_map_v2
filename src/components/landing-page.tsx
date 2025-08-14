@@ -11,9 +11,10 @@ import type { LocationData } from "@/components/main-dashboard"
 interface LandingPageProps {
   onAnalyzeVideo: (url: string, locations?: LocationData[]) => void
   onShowAuth: (mode: 'login' | 'signup') => void
+  onNavigateToDashboard?: () => void
 }
 
-export function LandingPage({ onAnalyzeVideo, onShowAuth }: LandingPageProps) {
+export function LandingPage({ onAnalyzeVideo, onShowAuth, onNavigateToDashboard }: LandingPageProps) {
   const [videoUrl, setVideoUrl] = useState("")
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [error, setError] = useState("")
@@ -55,17 +56,13 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth }: LandingPageProps) {
     try {
       // JWT 토큰과 함께 YouTube URL 전송
       const isAuthenticated = apiClient.isAuthenticated()
-      console.log('인증 상태:', isAuthenticated)
-      console.log('YouTube URL 분석 시작:', videoUrl)
       
       const response = await apiClient.processYouTubeURL(videoUrl, isAuthenticated)
-      console.log('API 응답:', response)
       
       // API 응답을 앱에서 사용하는 형식으로 변환
       const videoId = apiClient.extractVideoId(videoUrl)
       if (videoId) {
         const locations = apiClient.convertApiPlacesToLocations(response.places, videoId)
-        console.log('변환된 위치 데이터:', locations)
         
         // 분석 결과와 함께 콜백 호출
         onAnalyzeVideo(videoUrl, locations)
@@ -73,7 +70,6 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth }: LandingPageProps) {
         onAnalyzeVideo(videoUrl, [])
       }
     } catch (err) {
-      console.error('YouTube URL 분석 오류:', err)
       setError(err instanceof Error ? err.message : '비디오 분석 중 오류가 발생했습니다.')
       
       // 오류가 발생해도 빈 결과로 대시보드 이동
@@ -83,7 +79,7 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth }: LandingPageProps) {
     }
   }
 
-  const isValidUrl = videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be') || videoUrl.trim().length > 0
+  const isValidUrl = videoUrl.includes('youtube.com/watch?v=') || videoUrl.includes('youtu.be/')
 
   return (
     <div className="flex flex-col min-h-screen bg-white">
@@ -107,7 +103,7 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth }: LandingPageProps) {
                   setIsLoggedIn(false)
                   setUserEmail(null)
                 }}
-                className="text-black hover:bg-gray-100 border-2 border-transparent hover:border-black"
+                className="text-black hover:bg-gray-100 border-2 border-transparent hover:border-black mt-2"
               >
                 Logout
               </Button>
@@ -116,10 +112,16 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth }: LandingPageProps) {
             <>
               <Button 
                 variant="ghost" 
-                onClick={() => onShowAuth('login')}
+                onClick={() => {
+                  if (isLoggedIn && onNavigateToDashboard) {
+                    onNavigateToDashboard()
+                  } else {
+                    onShowAuth('login')
+                  }
+                }}
                 className="text-black hover:bg-gray-100 border-2 border-transparent hover:border-black mt-2"
               >
-                Log In
+                {isLoggedIn ? 'Go to Dashboard' : 'Log In'}
               </Button>
               <Button 
                 onClick={() => onShowAuth('signup')}

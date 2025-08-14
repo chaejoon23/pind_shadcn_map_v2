@@ -45,7 +45,7 @@ export function VideoHistoryList({ videos, selectedVideos, onVideoToggle }: Vide
             <div className="flex-shrink-0">
               <Image
                 src={video.thumbnail || "/placeholder.svg"}
-                alt={video.title}
+                alt={video.title || "Video thumbnail"}
                                 width={80}
                 height={80}
                 className="rounded object-cover"

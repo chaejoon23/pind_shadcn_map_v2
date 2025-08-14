@@ -1,14 +1,14 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { LandingPage } from "@/components/landing-page"
+import { MainDashboard } from "@/components/main-dashboard"
 import { AuthModal } from "@/components/auth-modal"
 import { apiClient } from "@/lib/api"
 import { useRouter } from "next/navigation"
 
 type AuthMode = 'login' | 'signup' | null
 
-export default function Home() {
+export default function DashboardPage() {
   const [authMode, setAuthMode] = useState<AuthMode>(null)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const router = useRouter()
@@ -18,50 +18,36 @@ export default function Home() {
     const checkAuthStatus = () => {
       const isAuthenticated = apiClient.isAuthenticated()
       setIsLoggedIn(isAuthenticated)
+      
+      // 로그인하지 않은 경우 랜딩 페이지로 리다이렉트
+      if (!isAuthenticated) {
+        router.push('/')
+      }
     }
     
     checkAuthStatus()
-  }, [])
-
-  const handleAnalyzeVideo = async (url: string, locations: any[] = []) => {
-    // Require login before analyzing video
-    if (!isLoggedIn) {
-      setAuthMode('login')
-      return
-    }
-    
-    // YouTube URL 분석 후 대시보드로 이동
-    router.push('/dashboard')
-  }
+  }, [router])
 
   const handleAuth = () => {
     // Check current auth status from API
     const isAuthenticated = apiClient.isAuthenticated()
     setIsLoggedIn(isAuthenticated)
     setAuthMode(null)
-    if (isAuthenticated) {
-      router.push('/dashboard')
-    }
   }
 
   const handleShowAuth = (mode: AuthMode) => {
     setAuthMode(mode)
   }
 
-  const handleNavigateToDashboard = () => {
-    if (isLoggedIn) {
-      router.push('/dashboard')
-    } else {
-      setAuthMode('login')
-    }
+  // 로그인하지 않은 상태에서는 아무것도 렌더링하지 않음 (리다이렉트 중)
+  if (!isLoggedIn) {
+    return null
   }
 
   return (
     <>
-      <LandingPage
-        onAnalyzeVideo={handleAnalyzeVideo}
+      <MainDashboard 
         onShowAuth={handleShowAuth}
-        onNavigateToDashboard={handleNavigateToDashboard}
       />
       
       {/* Auth Modal */}

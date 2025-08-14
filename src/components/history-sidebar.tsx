@@ -95,7 +95,7 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
                 <div className="flex-shrink-0 cursor-pointer w-[106px] h-[60px] overflow-hidden rounded border-2 border-gray-500">
                   <Image
                     src={analyzingVideo.thumbnail || "/placeholder.svg"}
-                    alt={analyzingVideo.title}
+                    alt={analyzingVideo.title || "Video thumbnail"}
                     width={106}
                     height={60}
                     className="w-full h-full object-cover"
@@ -137,7 +137,7 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
                   <div className="flex-shrink-0 cursor-pointer w-[106px] h-[60px] overflow-hidden rounded border-2 border-black" onClick={() => onVideoClick(video)}>
                     <Image
                       src={video.thumbnail || "/placeholder.svg"}
-                      alt={video.title}
+                      alt={video.title || "Video thumbnail"}
                       width={106}
                       height={60}
                       className={`w-full h-full object-cover transition-all ${
@@ -155,7 +155,7 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
                     <p className={`text-xs mt-1 font-medium ${
                       isSelected ? "text-black" : "text-gray-600"
                     }`}>
-                      {video.locations.length} location{video.locations.length !== 1 ? "s" : ""}
+                      {video.locations?.length || 0} location{(video.locations?.length || 0) !== 1 ? "s" : ""}
                     </p>
                   </div>
                 </div>
@@ -260,7 +260,7 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
                 <div className="flex-shrink-0 cursor-pointer w-[106px] h-[60px] overflow-hidden rounded border-2 border-black" onClick={() => onVideoClick(video)}>
                   <Image
                     src={video.thumbnail || "/placeholder.svg"}
-                    alt={video.title}
+                    alt={video.title || "Video thumbnail"}
                     width={106}
                     height={60}
                     className={`w-full h-full object-cover transition-all ${
@@ -278,7 +278,7 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
                   <p className={`text-xs mt-1 font-medium ${
                     isSelected ? "text-black-600" : "text-gray-600"
                   }`}>
-                    {video.locations.length} location{video.locations.length !== 1 ? "s" : ""}
+                    {video.locations?.length || 0} location{(video.locations?.length || 0) !== 1 ? "s" : ""}
                   </p>
                 </div>
               </div>

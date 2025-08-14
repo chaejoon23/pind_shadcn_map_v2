@@ -148,10 +148,6 @@ export function CheckedVideosPanel({
                             <h4 className="text-sm font-medium text-black mb-1">
                               {location.name}
                             </h4>
-                            <div className="flex items-center space-x-2 text-xs text-gray-600 mb-1">
-                              <Tag className="w-3 h-3" />
-                              <span>{location.category}</span>
-                            </div>
                             <p className="text-xs text-gray-600 line-clamp-2">
                               {location.address}
                             </p>

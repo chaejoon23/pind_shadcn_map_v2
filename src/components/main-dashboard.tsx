@@ -41,13 +41,7 @@ interface MainDashboardProps {
 }
 
 export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }: MainDashboardProps) {
-  // Authentication check - redirect if not authenticated
-  useEffect(() => {
-    if (!apiClient.isAuthenticated()) {
-      onShowAuth?.('login')
-      return
-    }
-  }, [])
+  // Remove forced authentication check - let parent handle routing
   const [selectedVideos, setSelectedVideos] = useState<string[]>([])
   
   const [showMobileOverlay, setShowMobileOverlay] = useState(false)
@@ -80,16 +74,14 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
         }
         // 로그인 사용자: 히스토리 불러오기
         try {
-          console.log('로그인한 사용자의 히스토리 불러오기 시작')
           const historyVideos = await apiClient.getUserHistory()
-          console.log('히스토리 불러오기 완료:', historyVideos.length, '개 비디오')
           
           // 히스토리를 최신 순으로 정렬 (가장 최근에 추가된 것이 맨 앞에)
           historyVideos.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
           
           setMockVideos(historyVideos)
         } catch (error) {
-          console.error('사용자 히스토리 불러오기 실패:', error)
+          // 히스토리 불러오기 실패 시 빈 상태로 시작
         }
       } else {
         // 비로그인 사용자: 빈 상태로 시작
@@ -105,7 +97,6 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
   useEffect(() => {
     if (initialUrl && initialLocations) {
       const processInitialData = async () => {
-        console.log('초기 URL과 위치 데이터 처리:', initialUrl, initialLocations)
         const videoId = apiClient.extractVideoId(initialUrl) || 'unknown'
         
         const newVideo: VideoData = {
@@ -142,13 +133,9 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
       
       processInitialData()
     } else if (initialUrl) {
-      console.log('초기 URL 처리:', initialUrl)
       const processInitialUrl = async () => {
         try {
-          console.log('클라이언트: 초기 URL 처리 시작:', initialUrl)
-          console.log('클라이언트: API 호출 시작')
           const response = await apiClient.processYouTubeURL(initialUrl, isLoggedIn)
-          console.log('클라이언트: API 응답 수신:', response)
           const videoId = apiClient.extractVideoId(initialUrl) || 'unknown'
           const locations = apiClient.convertApiPlacesToLocations(response.places, videoId)
           
@@ -172,7 +159,6 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
             setSelectedVideos([videoId])
           }
         } catch (error) {
-          console.error('클라이언트: 초기 URL 처리 중 오류:', error)
           alert(`오류 발생: ${error}`)
         }
       }
@@ -180,28 +166,25 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     }
   }, [initialUrl, initialLocations, isLoggedIn])
 
-  // Auto-select the most recently requested video only when new videos are added
+  // Auto-select the most recently requested video when videos are loaded
   useEffect(() => {
-    // 새 비디오가 추가되었고 아무것도 선택되지 않은 경우에만 자동 선택
-    // mockVideos[0]는 항상 가장 최근에 요청된 비디오 (배열의 첫 번째)
+    // 비디오가 있고 아무것도 선택되지 않은 경우 첫 번째 비디오 자동 선택
     if (mockVideos.length > 0 && selectedVideos.length === 0) {
-      // 사용자가 의도적으로 모든 비디오를 체크 해제한 경우가 아닌지 확인
-      // 이 경우에는 자동 선택하지 않음
-      const hasNewVideo = mockVideos.some(video => !selectedVideos.includes(video.id))
-      if (hasNewVideo) {
-        setSelectedVideos([mockVideos[0].id])
-      }
+      setSelectedVideos([mockVideos[0].id])
     }
-  }, [mockVideos.length])
+  }, [mockVideos, selectedVideos])
 
   // 선택된 비디오들의 위치 추출 및 중복 계산
   const selectedLocations = mockVideos
     .filter((video) => selectedVideos.includes(video.id))
-    .flatMap((video) => video.locations)
+    .flatMap((video) => video.locations || [])
 
   // 위치 중복 계산 함수: 해당 위치가 몇 개의 서로 다른 비디오에서 언급되었는지 계산
   const getLocationOverlapCount = (location: LocationData) => {
+    if (!location.coordinates) return 1
+    
     const matchingLocations = selectedLocations.filter(loc => 
+      loc.coordinates &&
       Math.abs(loc.coordinates.lat - location.coordinates.lat) < 0.001 &&
       Math.abs(loc.coordinates.lng - location.coordinates.lng) < 0.001
     )
@@ -243,10 +226,8 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
       clearInterval(progressIntervalRef.current)
     }
 
-    console.log('클라이언트: URL 처리 시작:', url)
     const currentlyLoggedIn = apiClient.isAuthenticated()
     const videoId = apiClient.extractVideoId(url) || 'unknown'
-    console.log('추출된 비디오 ID:', videoId)
     
     let videoDataForAnalysis: VideoData = {
       id: videoId,
@@ -308,7 +289,6 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
       
       setSelectedVideos([videoId])
     } catch (error) {
-      console.error('클라이언트: YouTube URL 처리 중 오류:', error)
       alert(`오류 발생: ${error}`)
     } finally {
       if (progressIntervalRef.current) {
@@ -333,11 +313,11 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
   }
 
   const handleSettings = () => {
-    console.log('Settings clicked')
+    // Settings functionality to be implemented
   }
 
   const handleManageAccount = () => {
-    console.log('Manage account clicked')
+    // Account management functionality to be implemented
   }
 
   const handleNavigateHome = () => {
@@ -393,8 +373,10 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
             selectedLocation={null}
             onPinClick={() => {}}
             onProcessUrl={processYouTubeURL}
+            onNavigateHome={handleNavigateHome}
             isAnalyzing={isAnalyzing}
             analysisProgress={analysisProgress}
+            videos={mockVideos}
           />
         </div>
       </div>
@@ -407,8 +389,10 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
           selectedLocation={null}
           onPinClick={() => {}} 
           onProcessUrl={processYouTubeURL}
+          onNavigateHome={handleNavigateHome}
           isAnalyzing={isAnalyzing}
           analysisProgress={analysisProgress}
+          videos={mockVideos}
         />
 
         {/* Mobile Menu Button */}
