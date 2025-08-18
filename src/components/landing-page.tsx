@@ -97,13 +97,12 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth, onNavigateToDashboard 
             <div className="flex items-center space-x-3">
               <span className="text-black font-medium">{userEmail?.split('@')[0]}</span>
               <Button 
-                variant="ghost" 
                 onClick={() => {
                   apiClient.clearAuthToken()
                   setIsLoggedIn(false)
                   setUserEmail(null)
                 }}
-                className="text-black hover:bg-gray-100 border-2 border-transparent hover:border-black mt-2"
+                className="bg-black hover:bg-gray-800 text-white px-6 border-2 border-black"
               >
                 Logout
               </Button>

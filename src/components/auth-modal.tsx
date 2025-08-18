@@ -52,7 +52,18 @@ export function AuthModal({ mode, onClose, onAuth, onSwitchMode }: AuthModalProp
       if (mode === 'login') {
         const authResponse = await apiClient.login(email, password)
         apiClient.saveAuthToken(authResponse.access_token, authResponse.token_type, email)
-        onAuth()
+        
+        // 익스텐션에서 온 요청인지 확인 (return_url이 있는지)
+        const urlParams = new URLSearchParams(window.location.search)
+        const returnUrl = urlParams.get('return_url')
+        
+        if (returnUrl) {
+          // 콜백 URL로 토큰 정보와 함께 리다이렉트
+          const callbackUrl = `/auth/callback?token=${encodeURIComponent(authResponse.access_token)}&token_type=${encodeURIComponent(authResponse.token_type)}&user_email=${encodeURIComponent(email)}`
+          window.location.href = callbackUrl
+        } else {
+          onAuth()
+        }
       } else {
         await apiClient.signup(email, password)
         setError('회원가입 성공! 이제 로그인 해주세요.')

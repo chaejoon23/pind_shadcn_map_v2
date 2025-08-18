@@ -130,7 +130,7 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
               const isSelected = selectedVideos.includes(video.id)
               return (
                 <div
-                  key={video.id}
+                  key={`desktop-${video.id}`}
                   className={`flex p-3 rounded-lg transition-colors items-center space-x-3 border-2 ${
                     isSelected 
                       ? "bg-gray-100 border-black" 
@@ -264,7 +264,7 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
             const isSelected = selectedVideos.includes(video.id)
             return (
               <div
-                key={video.id}
+                key={`mobile-${video.id}`}
                 className="flex p-3 rounded-lg hover:bg-gray-100 transition-colors items-center space-x-3 border-2 border-transparent hover:border-black"
               >
                 <Checkbox

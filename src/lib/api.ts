@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://192.168.18.124:9000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
 export interface LocationData {
   id: string;
@@ -138,7 +138,6 @@ class ApiClient {
 
   async processYouTubeURL(
     url: string, 
-    withAuth = false, 
     onProgressUpdate?: (progress: number, currentStep: string) => void
   ): Promise<ApiResponse> {
     
@@ -318,6 +317,17 @@ class ApiClient {
     if (userEmail) {
       sessionStorage.setItem('user_email', userEmail);
     }
+  }
+
+  setAuthToken(token: string, tokenType: string = 'Bearer'): Promise<void> {
+    return new Promise((resolve) => {
+      console.log('API 클라이언트: 토큰 저장 중', { tokenLength: token.length, tokenType });
+      sessionStorage.setItem('jwt_token', token);
+      sessionStorage.setItem('token_type', tokenType);
+      console.log('API 클라이언트: 토큰 저장 완료');
+      console.log('API 클라이언트: 인증 상태 확인', this.isAuthenticated());
+      resolve();
+    });
   }
 
   clearAuthToken(): void {

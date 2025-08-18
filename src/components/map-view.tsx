@@ -6,6 +6,7 @@ import { Tag } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Search, Link2 } from 'lucide-react'
+import { apiClient } from "@/lib/api"
 
 // Google Maps type declaration
 declare global {
