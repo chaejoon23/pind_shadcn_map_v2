@@ -9,8 +9,8 @@ import { Menu } from 'lucide-react'
 import { CheckedVideosPanel } from "@/components/checked-videos-panel"
 import { HistorySidebar } from "@/components/history-sidebar"
 import { UserProfileDropdown } from "@/components/user-profile-dropdown"
-import { UrlInput } from "@/components/url-input"
 import { apiClient } from "@/lib/api"
+import { useRouter } from "next/navigation"
 
 export interface VideoData {
   id: string
@@ -42,6 +42,7 @@ interface MainDashboardProps {
 
 export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }: MainDashboardProps) {
   // Remove forced authentication check - let parent handle routing
+  const router = useRouter()
   const [selectedVideos, setSelectedVideos] = useState<string[]>([])
   
   const [showMobileOverlay, setShowMobileOverlay] = useState(false)
@@ -49,7 +50,7 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
   const [showCheckedVideos, setShowCheckedVideos] = useState(false)
   const [clickedVideo, setClickedVideo] = useState<VideoData | null>(null)
   const [mockVideos, setMockVideos] = useState<VideoData[]>([])
-  const [sessionVideos, setSessionVideos] = useState<VideoData[]>([]) // 현재 세션 비디오들
+  const [sessionVideos, setSessionVideos] = useState<VideoData[]>([])
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string; avatar?: string } | undefined>(undefined)
   const [isAnalyzing, setIsAnalyzing] = useState(false) // URL 분석 상태
@@ -112,27 +113,14 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
           locations: initialLocations
         }
       
-        if (isLoggedIn) {
-          // 로그인 사용자: 히스토리에 추가하거나 업데이트
-          setMockVideos(prev => {
-            const existing = prev.find(v => v.id === videoId)
-            if (existing) {
-              return prev.map(v => v.id === videoId ? newVideo : v)
-            }
-            return [newVideo, ...prev]
-          })
-        } else {
-          // 비로그인 사용자: 세션 비디오에 추가
-          setSessionVideos(prev => {
-            const existing = prev.find(v => v.id === videoId)
-            if (existing) {
-              return prev.map(v => v.id === videoId ? newVideo : v)
-            }
-            return [newVideo, ...prev]
-          })
-          // 비로그인 사용자의 경우 mockVideos를 세션 비디오로 설정
-          setMockVideos([newVideo])
-        }
+        // 로그인 사용자만 지원: 히스토리에 추가하거나 업데이트
+        setMockVideos(prev => {
+          const existing = prev.find(v => v.id === videoId)
+          if (existing) {
+            return prev.map(v => v.id === videoId ? newVideo : v)
+          }
+          return [newVideo, ...prev]
+        })
         setSelectedVideos([videoId])
         initialUrlProcessed.current = true // 성공 시에만 플래그 설정
       }
@@ -141,8 +129,7 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     } else if (initializationComplete && initialUrl && !initialUrlProcessed.current) {
       const processInitialUrl = async () => {
         try {
-          const currentlyLoggedIn = apiClient.isAuthenticated()
-          const response = await apiClient.processYouTubeURL(initialUrl, currentlyLoggedIn)
+          const response = await apiClient.processYouTubeURL(initialUrl)
           const videoId = apiClient.extractVideoId(initialUrl) || 'unknown'
           const locations = apiClient.convertApiPlacesToLocations(response.places, videoId)
           
@@ -155,6 +142,7 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
               locations
             }
             
+            const currentlyLoggedIn = apiClient.isAuthenticated()
             if (currentlyLoggedIn) {
               // 로그인 사용자: 히스토리에 추가
               setMockVideos(prev => [newVideo, ...prev])
@@ -239,7 +227,7 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     const videoId = apiClient.extractVideoId(url) || 'unknown'
     
     
-    let videoDataForAnalysis: VideoData = {
+    const videoDataForAnalysis: VideoData = {
       id: videoId,
       title: `YouTube Video - ${videoId}`, // 임시 제목, 나중에 업데이트
       thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
@@ -258,8 +246,7 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     try {
       const response = await apiClient.processYouTubeURL(
         url, 
-        currentlyLoggedIn,
-        (progress, step) => {
+        (progress: number, step: string) => {
           setAnalysisProgress(progress)
           setCurrentStep(step)
         }
@@ -345,6 +332,7 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     setMockVideos([])
     setSessionVideos([])
     setSelectedVideos([])
+    // 강제로 페이지를 완전히 새로고침하여 로그인 상태 초기화
     window.location.href = '/'
   }
 
