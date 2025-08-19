@@ -29,7 +29,7 @@ export function GoogleSignInButton() {
       <div className="flex items-center space-x-2">
         <div className="flex items-center space-x-2 text-sm">
           <User className="w-4 h-4" />
-          <span className="truncate max-w-32">{user.getBasicProfile().getName()}</span>
+          <span className="truncate max-w-32">{user.name}</span>
         </div>
         <Button onClick={signOut} variant="outline" size="sm">
           <LogOut className="w-4 h-4" />

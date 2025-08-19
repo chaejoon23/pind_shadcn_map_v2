@@ -3,10 +3,17 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import { initializeGoogleAPIs } from "@/lib/google-maps-api"
 
+interface GoogleUser {
+  id: string
+  email: string
+  name: string
+  picture?: string
+}
+
 interface GoogleAuthContextType {
   isInitialized: boolean
   isSignedIn: boolean
-  user: any | null
+  user: GoogleUser | null
   signIn: () => Promise<void>
   signOut: () => Promise<void>
   error: string | null
@@ -17,7 +24,7 @@ const GoogleAuthContext = createContext<GoogleAuthContextType | null>(null)
 export function GoogleAuthProvider({ children }: { children: ReactNode }) {
   const [isInitialized, setIsInitialized] = useState(false)
   const [isSignedIn, setIsSignedIn] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<GoogleUser | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {

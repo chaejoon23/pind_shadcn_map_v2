@@ -10,7 +10,6 @@ import { CheckedVideosPanel } from "@/components/checked-videos-panel"
 import { HistorySidebar } from "@/components/history-sidebar"
 import { UserProfileDropdown } from "@/components/user-profile-dropdown"
 import { apiClient } from "@/lib/api"
-import { useRouter } from "next/navigation"
 
 export interface VideoData {
   id: string
@@ -40,18 +39,14 @@ interface MainDashboardProps {
   onShowAuth?: (mode: 'login' | 'signup') => void
 }
 
-export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }: MainDashboardProps) {
+export function MainDashboard({ initialUrl, initialLocations, onShowAuth }: MainDashboardProps) {
   // Remove forced authentication check - let parent handle routing
-  const router = useRouter()
   const [selectedVideos, setSelectedVideos] = useState<string[]>([])
   
   const [showMobileOverlay, setShowMobileOverlay] = useState(false)
   const [mobileView, setMobileView] = useState<"list" | "details">("list")
   const [showCheckedVideos, setShowCheckedVideos] = useState(false)
-  const [clickedVideo, setClickedVideo] = useState<VideoData | null>(null)
   const [mockVideos, setMockVideos] = useState<VideoData[]>([])
-  const [sessionVideos, setSessionVideos] = useState<VideoData[]>([])
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string; avatar?: string } | undefined>(undefined)
   const [isAnalyzing, setIsAnalyzing] = useState(false) // URL 분석 상태
   const [analyzingVideo, setAnalyzingVideo] = useState<VideoData | null>(null) // 현재 분석 중인 비디오
@@ -65,7 +60,7 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
   useEffect(() => {
     const initializeData = async () => {
       const authenticated = apiClient.isAuthenticated()
-      setIsLoggedIn(authenticated)
+      // 인증 상태 확인됨
       
       if (authenticated) {
         // 로그인한 사용자 정보 설정
@@ -84,7 +79,7 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
           historyVideos.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
           
           setMockVideos(historyVideos)
-        } catch (error) {
+        } catch {
           // 히스토리 불러오기 실패 시 빈 상태로 시작
         }
       } else {
@@ -147,15 +142,14 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
               // 로그인 사용자: 히스토리에 추가
               setMockVideos(prev => [newVideo, ...prev])
             } else {
-              // 비로그인 사용자: 세션 비디오로 설정
-              setSessionVideos([newVideo])
+              // 비로그인 사용자: 목 비디오로 설정
               setMockVideos([newVideo])
             }
             setSelectedVideos([videoId])
             initialUrlProcessed.current = true // 성공 시에만 플래그 설정
           }
-        } catch (error) {
-          console.error('Initial URL processing failed:', error)
+        } catch {
+          console.error('Initial URL processing failed')
           // 실패 시 플래그를 설정하지 않아서 재시도 가능
         }
       }
@@ -212,8 +206,7 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
       setSelectedVideos([...selectedVideos, video.id])
     }
     
-    // Show the clicked video details (체크박스 상태는 변경하지 않음)
-    setClickedVideo(video)
+    // Show the checked videos panel
     setShowCheckedVideos(true)
   }
 
@@ -268,7 +261,7 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
             const oembedData = await oembedResponse.json()
             finalTitle = oembedData.title || finalTitle
           }
-        } catch (error) {
+        } catch {
           // CORS 오류 무시하고 기본 제목 유지 (정상적인 동작)
         }
       }
@@ -289,18 +282,11 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
           return [finalVideo, ...prev]
         })
       } else {
-        setSessionVideos(prev => {
-          const existing = prev.find(v => v.id === videoId)
+        // 비로그인 사용자: 목 비디오 업데이트
+        setMockVideos((prev: VideoData[]) => {
+          const existing = prev.find((v: VideoData) => v.id === videoId)
           if (existing) {
-            return prev.map(v => v.id === videoId ? finalVideo : v)
-          }
-          return [finalVideo, ...prev]
-        })
-        
-        setMockVideos(prev => {
-          const existing = prev.find(v => v.id === videoId)
-          if (existing) {
-            return prev.map(v => v.id === videoId ? finalVideo : v)
+            return prev.map((v: VideoData) => v.id === videoId ? finalVideo : v)
           }
           return [finalVideo, ...prev]
         })
@@ -327,10 +313,8 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
 
   const handleLogout = () => {
     apiClient.clearAuthToken()
-    setIsLoggedIn(false)
     setCurrentUser(undefined)
     setMockVideos([])
-    setSessionVideos([])
     setSelectedVideos([])
     // 강제로 페이지를 완전히 새로고침하여 로그인 상태 초기화
     window.location.href = '/'
@@ -385,7 +369,6 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
             <CheckedVideosPanel
               videos={mockVideos}
               selectedVideos={selectedVideos}
-              clickedVideo={clickedVideo}
               onClose={() => setShowCheckedVideos(false)}
             />
           </div>
