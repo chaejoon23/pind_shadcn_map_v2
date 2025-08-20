@@ -236,11 +236,11 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
       const overlapCount = (location as any).overlapCount || 1
       
       // 중복 위치에 따른 색상 결정
-      let markerColor = "#ef4444" // 기본 빨간색
+      let markerColor = "#ef4444" // Default red
       if (isSelected) {
-        markerColor = "#2563eb" // 선택된 경우 파란색
+        markerColor = "#2563eb" // Blue when selected
       } else if (isHighlighted) {
-        markerColor = "#dc2626" // 중복된 위치는 더 진한 빨간색
+        markerColor = "#dc2626" // Darker red for overlapping locations
       }
       
       // 중복 횟수에 따른 크기 조정
@@ -249,7 +249,7 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
       const marker = new window.google.maps.Marker({
         position: { lat: location.coordinates.lat, lng: location.coordinates.lng },
         map: googleMap,
-        title: `${location.name}${isHighlighted ? ` (${overlapCount}개 비디오)` : ''}`,
+        title: `${location.name}${isHighlighted ? ` (${overlapCount} videos)` : ''}`,
         icon: {
           url: 'data:image/svg+xml;base64,' + btoa(`
             <svg width="${markerSize}" height="${markerSize}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

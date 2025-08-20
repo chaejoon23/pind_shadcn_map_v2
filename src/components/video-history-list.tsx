@@ -21,8 +21,8 @@ export function VideoHistoryList({ videos, selectedVideos, onVideoToggle }: Vide
           <Download className="w-10 h-10 text-gray-400" />
         </div>
         <p className="text-gray-600 mb-6 text-sm leading-relaxed">
-          PIND 익스텐션을 사용해
-          <br />첫 장소들을 찾아보세요!
+          Use the PIND extension to
+          <br />discover your first places!
         </p>
         <Button className="bg-blue-600 hover:bg-blue-700">
           <Download className="w-4 h-4 mr-2" />

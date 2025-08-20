@@ -32,17 +32,17 @@ export function AuthModal({ mode, onClose, onAuth, onSwitchMode }: AuthModalProp
     setError("")
     
     if (!isValidEmail(email)) {
-      setError('올바른 이메일 형식을 입력해주세요.')
+      setError('Please enter a valid email format.')
       return
     }
 
     if (!email || !password) {
-      setError('이메일과 비밀번호를 모두 입력해주세요.')
+      setError('Please enter both email and password.')
       return
     }
 
     if (mode === 'signup' && !name) {
-      setError('이름을 입력해주세요.')
+      setError('Please enter your name.')
       return
     }
 
@@ -66,14 +66,14 @@ export function AuthModal({ mode, onClose, onAuth, onSwitchMode }: AuthModalProp
         }
       } else {
         await apiClient.signup(email, password)
-        setError('회원가입 성공! 이제 로그인 해주세요.')
+        setError('Signup successful! Please log in now.')
         onSwitchMode('login')
         setEmail('')
         setPassword('')
         setName('')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '오류가 발생했습니다. 서버가 실행 중인지 확인해주세요.')
+      setError(err instanceof Error ? err.message : 'An error occurred. Please check if the server is running.')
     } finally {
       setLoading(false)
     }
@@ -167,8 +167,8 @@ export function AuthModal({ mode, onClose, onAuth, onSwitchMode }: AuthModalProp
             >
               {loading
                 ? mode === 'login' 
-                  ? '로그인 중...' 
-                  : '가입 처리 중...'
+                  ? 'Signing in...' 
+                  : 'Creating account...'
                 : mode === 'login' 
                   ? 'Sign In' 
                   : 'Create Account'

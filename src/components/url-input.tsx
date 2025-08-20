@@ -28,7 +28,7 @@ export function UrlInput({ onProcessUrl }: UrlInputProps) {
     try {
       await onProcessUrl(url.trim())
       console.log('onProcessUrl 성공적으로 완료')
-      setUrl("") // 성공시 입력창 초기화
+      setUrl("") // Reset input on success
     } catch (error) {
       console.error('URL 처리 실패:', error)
     } finally {
@@ -40,7 +40,7 @@ export function UrlInput({ onProcessUrl }: UrlInputProps) {
     <form onSubmit={handleSubmit} className="flex gap-2 p-4 bg-white border-b">
       <Input
         type="url"
-        placeholder="YouTube URL을 입력하세요..."
+        placeholder="Enter YouTube URL..."
         value={url}
         onChange={(e) => setUrl(e.target.value)}
         disabled={isProcessing}

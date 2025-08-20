@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { MapPin, Clock, Search, Play, Link2, Bookmark } from 'lucide-react'
+import { TextType } from "@/components/ui/text-type"
 import { apiClient } from "@/lib/api"
 import type { LocationData } from "@/components/main-dashboard"
 
@@ -20,6 +21,7 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth, onNavigateToDashboard 
   const [error, setError] = useState("")
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [isFocused, setIsFocused] = useState(false)
 
   // 컴포넌트 마운트 시 로그인 상태 확인
   useEffect(() => {
@@ -43,7 +45,7 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth, onNavigateToDashboard 
 
     // Check if user is logged in before allowing analysis
     if (!isLoggedIn) {
-      setError("서비스를 사용하려면 먼저 로그인해주세요.")
+      setError("Please log in first to use the service.")
       setTimeout(() => {
         onShowAuth('login')
       }, 1000)
@@ -57,20 +59,27 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth, onNavigateToDashboard 
       // JWT 토큰과 함께 YouTube URL 전송
       const isAuthenticated = apiClient.isAuthenticated()
       
-      const response = await apiClient.processYouTubeURL(videoUrl, isAuthenticated)
+      const response = await apiClient.processYouTubeURL(videoUrl)
       
       // API 응답을 앱에서 사용하는 형식으로 변환
       const videoId = apiClient.extractVideoId(videoUrl)
       if (videoId) {
         const locations = apiClient.convertApiPlacesToLocations(response.places, videoId)
         
+        // Check if no places were found
+        if (locations.length === 0) {
+          setError("0 places found")
+          return // Don't save to history or call onAnalyzeVideo
+        }
+        
         // 분석 결과와 함께 콜백 호출
         onAnalyzeVideo(videoUrl, locations)
       } else {
-        onAnalyzeVideo(videoUrl, [])
+        setError("Invalid YouTube URL")
+        return
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '비디오 분석 중 오류가 발생했습니다.')
+      setError(err instanceof Error ? err.message : 'An error occurred during video analysis.')
       
       // 오류가 발생해도 빈 결과로 대시보드 이동
       onAnalyzeVideo(videoUrl, [])
@@ -156,13 +165,34 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth, onNavigateToDashboard 
               <Link2 className="w-5 h-5" />
             </div>
             
-            <Input
-              type="url"
-              placeholder="Paste a YouTube URL to get started..."
-              value={videoUrl}
-              onChange={(e) => setVideoUrl(e.target.value)}
-              className="flex-1 border-0 bg-transparent text-lg placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 py-6 text-black"
-            />
+            <div className="flex-1 relative">
+              <Input
+                type="url"
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                className="flex-1 border-0 bg-transparent text-lg focus-visible:ring-0 focus-visible:ring-offset-0 py-6 text-black w-full"
+                placeholder=""
+              />
+              {!videoUrl && !isFocused && (
+                <div className="absolute inset-0 pointer-events-none flex items-center">
+                  <div className="text-lg text-black ml-0">
+                    <TextType
+                      text="Paste a YouTube URL to get started..."
+                      typingSpeed={50}
+                      initialDelay={0}
+                      showCursor={true}
+                      cursorCharacter="|"
+                      cursorClassName="text-black"
+                      loop={false}
+                      className="inline text-black"
+                      textColors={["#000000"]}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
             
             <div className="flex items-center space-x-2 pr-2">
               <Button
