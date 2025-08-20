@@ -24,7 +24,7 @@ interface HistorySidebarProps {
 
 export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoClick, onNavigateHome, onShowAuth, isAnalyzing, analyzingVideo, analysisProgress, currentStep }: HistorySidebarProps) {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
     const checkAuthStatus = () => {
@@ -57,15 +57,15 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
                 <History className="w-10 h-10 text-black" />
               </div>
               <p className="text-black mb-6 text-sm leading-relaxed font-medium">
-                YouTube 링크를 검색해보세요
-                <br />검색한 비디오가 여기에 표시됩니다
+                Try searching for YouTube links
+                <br />Searched videos will appear here
               </p>
               <Button 
                 onClick={onShowAuth}
                 className="bg-black hover:bg-gray-800 text-white border-2 border-black"
               >
                 <LogIn className="w-4 h-4 mr-2" />
-                로그인하여 히스토리 저장하기
+                Log in to save history
               </Button>
             </div>
           </ScrollArea>
@@ -107,18 +107,18 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
                     {analyzingVideo.title}
                   </h3>
                   <div className="text-xs mt-1 font-medium text-gray-600">
-                    <p>Analyzing... {analysisProgress}%</p>
+                    <p>Analyzing... {analysisProgress ?? 0}%</p>
                     {currentStep && (
                       <p className="text-xs text-gray-500 mt-1">
-                        {analysisProgress <= 25 ? 'Sending...' :
-                         analysisProgress <= 75 ? 'Analyzing...' :
-                         analysisProgress <= 95 ? 'Marking on map...' : 'Completed'}
+                        {(analysisProgress ?? 0) <= 25 ? 'Sending...' :
+                         (analysisProgress ?? 0) <= 75 ? 'Analyzing...' :
+                         (analysisProgress ?? 0) <= 95 ? 'Marking on map...' : 'Completed'}
                       </p>
                     )}
                     <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
                       <div 
                         className="bg-gray-500 h-1.5 rounded-full transition-all duration-500 ease-in-out"
-                        style={{ width: `${analysisProgress}%` }}
+                        style={{ width: `${analysisProgress ?? 0}%` }}
                       ></div>
                     </div>
                   </div>
@@ -195,8 +195,8 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
               <Download className="w-10 h-10 text-black" />
             </div>
             <p className="text-black mb-6 text-sm leading-relaxed font-medium">
-              PIND 익스텐션을 사용해
-              <br />첫 장소들을 찾아보세요!
+              Use the PIND extension to
+              <br />discover your first places!
             </p>
             <Button className="bg-black hover:bg-gray-800 text-white border-2 border-black">
               <Download className="w-4 h-4 mr-2" />
@@ -241,18 +241,18 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
                   {analyzingVideo.title}
                 </h3>
                 <div className="text-xs mt-1 font-medium text-gray-600">
-                  <p>Analyzing... {analysisProgress}%</p>
+                  <p>Analyzing... {analysisProgress ?? 0}%</p>
                   {currentStep && (
                     <p className="text-xs text-gray-500 mt-1">
-                      {analysisProgress <= 25 ? 'Sending...' :
-                       analysisProgress <= 75 ? 'Analyzing...' :
-                       analysisProgress <= 95 ? 'Marking on map...' : 'Completed'}
+                      {(analysisProgress ?? 0) <= 25 ? 'Sending...' :
+                       (analysisProgress ?? 0) <= 75 ? 'Analyzing...' :
+                       (analysisProgress ?? 0) <= 95 ? 'Marking on map...' : 'Completed'}
                     </p>
                   )}
                   <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
                     <div 
                       className="bg-gray-500 h-1.5 rounded-full transition-all duration-500 ease-in-out"
-                      style={{ width: `${analysisProgress}%` }}
+                      style={{ width: `${analysisProgress ?? 0}%` }}
                     ></div>
                   </div>
                 </div>

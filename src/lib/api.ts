@@ -142,24 +142,99 @@ class ApiClient {
   ): Promise<ApiResponse> {
     
     // Step 1: Submit job
+    console.log('Submitting YouTube URL for processing:', url);
     const jobResponse = await this.makeRequest<JobResponse>('/api/v1/youtube/process', {
       method: 'POST',
       body: JSON.stringify({ url }),
     });
+    console.log('Job submitted successfully, job_id:', jobResponse.job_id);
 
-    // Step 2: Poll for completion
-    return this.pollForJobCompletion(jobResponse.job_id, onProgressUpdate);
+    // Step 2: Check if it's a cached result or needs polling
+    if (jobResponse.job_id.startsWith('cached_')) {
+      // Handle cached results directly
+      console.log('Handling cached result for job:', jobResponse.job_id);
+      return this.handleCachedResult(jobResponse.job_id);
+    } else {
+      // Poll for completion for new jobs
+      return this.pollForJobCompletion(jobResponse.job_id, onProgressUpdate);
+    }
+  }
+
+  private async handleCachedResult(jobId: string): Promise<ApiResponse> {
+    // Extract video ID from cached job ID (cached_videoId format)
+    const videoId = jobId.replace('cached_', '');
+    console.log('Fetching cached result for video:', videoId);
+    
+    try {
+      // Server returns List[Place] directly, not PlacesWithVideoResponse
+      console.log('Attempting to fetch cached data from:', `/api/v1/youtube/places/${videoId}`);
+      const places = await this.makeRequest<ApiPlace[]>(`/api/v1/youtube/places/${videoId}`);
+      
+      console.log('Cached places received:', {
+        placesCount: places?.length || 0,
+        places: places
+      });
+      
+      return {
+        mode: 'db',
+        places: places || [],
+        video_title: `YouTube Video - ${videoId}`,
+        video_thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+      };
+    } catch (error) {
+      console.error('Failed to fetch cached result:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // "장소 정보가 없습니다" 오류는 정상 상황 (0개 위치)
+      if (errorMessage.includes('장소 정보가 없습니다') || errorMessage.includes('not found')) {
+        console.log('Video exists in DB but has no places - returning empty result');
+        return {
+          mode: 'db',
+          places: [],
+          video_title: `YouTube Video - ${videoId}`,
+          video_thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+        };
+      }
+      
+      // 다른 오류의 경우 fallback 시도
+      try {
+        const resultResponse = await this.makeRequest<JobResultResponse>(`/api/v1/jobs/${jobId}/result`);
+        return {
+          mode: 'db',
+          places: resultResponse.places || [],
+          video_title: resultResponse.video_title || `YouTube Video - ${videoId}`,
+          video_thumbnail: resultResponse.video_thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+        };
+      } catch (fallbackError) {
+        console.error('Fallback result fetch also failed:', fallbackError);
+        
+        // 최종적으로 빈 결과 반환 (오류 대신)
+        console.log('Returning empty result for cached video');
+        return {
+          mode: 'db',
+          places: [],
+          video_title: `YouTube Video - ${videoId}`,
+          video_thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+        };
+      }
+    }
   }
 
   private async pollForJobCompletion(
     jobId: string, 
     onProgressUpdate?: (progress: number, currentStep: string) => void
   ): Promise<ApiResponse> {
-    const pollInterval = 1000; // 1초마다 체크
+    const pollInterval = 10000; // Check every 10 seconds
+    let retryCount = 0;
+    const maxRetries = 3;
 
     while (true) {
       try {
+        console.log(`Polling job ${jobId}, retry count: ${retryCount}`);
         const statusResponse = await this.makeRequest<JobStatusResponse>(`/api/v1/jobs/${jobId}/status`);
+        
+        // Reset retry count on successful response
+        retryCount = 0;
         
         // Update progress callback if provided
         if (onProgressUpdate) {
@@ -168,6 +243,7 @@ class ApiClient {
         
         if (statusResponse.status === 'SUCCESS') {
           const resultResponse = await this.makeRequest<JobResultResponse>(`/api/v1/jobs/${jobId}/result`);
+          console.log(`Job ${jobId} completed successfully, places:`, resultResponse.places?.length || 0);
           return {
             mode: 'new',
             places: resultResponse.places || [],
@@ -178,24 +254,45 @@ class ApiClient {
           // Get detailed error from result endpoint
           try {
             const resultResponse = await this.makeRequest<JobResultResponse>(`/api/v1/jobs/${jobId}/result`);
-            const errorMessage = resultResponse.error_message || statusResponse.current_step || '알 수 없는 오류';
-            throw new Error(`작업 처리 실패: ${errorMessage}`);
+            const errorMessage = resultResponse.error_message || statusResponse.current_step || 'Unknown error';
+            console.error(`Job ${jobId} failed:`, errorMessage);
+            
+            // 특정 AI 모델 안전 필터 오류에 대한 사용자 친화적 메시지
+            if (errorMessage.includes('finish_reason') && errorMessage.includes('2')) {
+              throw new Error('Google AI 안전 필터로 인해 처리할 수 없습니다. 다른 비디오나 짧은 구간을 시도해보세요. (Safety filter triggered)');
+            }
+            if (errorMessage.includes('response.text') && errorMessage.includes('valid Part')) {
+              throw new Error('AI 모델 응답 오류입니다. 서버 관리자에게 문의하거나 다른 비디오를 시도해보세요. (Empty AI response)');
+            }
+            if (errorMessage.includes('quota') || errorMessage.includes('limit')) {
+              throw new Error('API 사용량 한도에 도달했습니다. 잠시 후 다시 시도해보세요.');
+            }
+            
+            throw new Error(`비디오 처리 실패: ${errorMessage}`);
           } catch (resultError) {
-            throw new Error(`작업 처리 실패: ${statusResponse.current_step || '알 수 없는 오류'}`);
+            console.error(`Job ${jobId} failed (result fetch error):`, resultError);
+            throw new Error(`비디오 처리 중 오류가 발생했습니다. 다시 시도해보세요.`);
           }
         }
 
         // Still processing, wait and try again
+        console.log(`Job ${jobId} still processing: ${statusResponse.current_step} (${statusResponse.progress}%)`);
         await new Promise(resolve => setTimeout(resolve, pollInterval));
       } catch (error) {
-        // If it's a network error or API error, continue polling
-        // Only throw for actual job failures
-        if (error instanceof Error && error.message.includes('작업 처리 실패')) {
+        // If it's a network error or API error, continue polling with retry limit
+        if (error instanceof Error && error.message.includes('Job processing failed')) {
           throw error;
         }
         
+        retryCount++;
+        console.log(`Network error during polling (attempt ${retryCount}/${maxRetries}):`, error);
+        
+        if (retryCount >= maxRetries) {
+          console.error(`Max retries reached for job ${jobId}`);
+          throw new Error(`Network error: Failed to poll job status after ${maxRetries} retries`);
+        }
+        
         // For network errors, wait a bit longer and retry
-        console.log('Network error during polling, retrying...', error);
         await new Promise(resolve => setTimeout(resolve, pollInterval * 2));
       }
     }
@@ -204,32 +301,47 @@ class ApiClient {
   async getUserHistory(): Promise<VideoData[]> {
     const historyData = await this.makeRequest<UserHistoryItem[]>('/api/v1/users/history');
     
-    // 백엔드 응답을 VideoData 형태로 변환
-    return historyData.map((item) => {
-      // title이 없거나 빈 문자열인 경우 기본값 사용
+    console.log('Received history data:', historyData.length, 'videos');
+    
+    // Convert backend response to VideoData format
+    const convertedData = historyData.map((item) => {
+      // Use default value if title is missing or empty
       const title = item.title && item.title.trim() 
         ? item.title 
         : `YouTube Video - ${item.id}`;
+      
+      // 유효한 좌표를 가진 위치만 포함
+      const validLocations = (item.places || []).filter(place => 
+        this.isValidCoordinates(place.lat || null, place.lng || null)
+      ).map((place, index: number) => ({
+        id: `place-${index}`,
+        name: place.name || 'Unknown Place',
+        address: '',
+        category: '',
+        description: '',
+        coordinates: {
+          lat: place.lat!,  // 위에서 검증했으므로 null이 아님
+          lng: place.lng!   // 위에서 검증했으므로 null이 아님
+        },
+        videoId: item.id
+      }));
+      
+      console.log(`Video ${item.id}: ${(item.places || []).length} total places, ${validLocations.length} valid places`);
       
       return {
         id: item.id,
         title: title,
         thumbnail: item.thumbnail_url || `https://img.youtube.com/vi/${item.id}/mqdefault.jpg`,
         date: new Date(item.created_at).toISOString().split('T')[0],
-        locations: (item.places || []).map((place, index: number) => ({
-          id: `place-${index}`,
-          name: place.name || 'Unknown Place',
-          address: '',
-          category: '',
-          description: '',
-          coordinates: {
-            lat: place.lat || 0,
-            lng: place.lng || 0
-          },
-          videoId: item.id
-        }))
+        locations: validLocations
       };
     });
+    
+    // Filter out videos with 0 valid locations
+    const videosWithLocations = convertedData.filter(video => video.locations.length > 0);
+    console.log('Videos with valid locations:', videosWithLocations.length);
+    
+    return videosWithLocations;
   }
 
 
@@ -238,9 +350,29 @@ class ApiClient {
   }
 
 
-  // API 응답을 앱에서 사용하는 형식으로 변환
+  // 좌표 유효성 검증 함수
+  isValidCoordinates(lat: number | null, lng: number | null): boolean {
+    return lat !== null && lng !== null && 
+           lat !== 0 && lng !== 0 && 
+           lat >= -90 && lat <= 90 && 
+           lng >= -180 && lng <= 180;
+  }
+
+  // Convert API response to app format - 유효한 좌표를 가진 위치만 포함
   convertApiPlacesToLocations(places: ApiPlace[], videoId: string): LocationData[] {
-    return places.map((place, index) => {
+    console.log('Converting places:', places.length, 'total places received');
+    
+    const validPlaces = places.filter(place => {
+      const isValid = this.isValidCoordinates(place.lat, place.lng);
+      if (!isValid) {
+        console.log('Invalid coordinates found:', place.name, 'lat:', place.lat, 'lng:', place.lng);
+      }
+      return isValid;
+    });
+    
+    console.log('Valid places after filtering:', validPlaces.length);
+    
+    return validPlaces.map((place, index) => {
       return {
         id: `place-${index}`,
         name: place.name || 'Unknown Place',
@@ -248,8 +380,8 @@ class ApiClient {
         category: '',
         description: '',
         coordinates: {
-          lat: place.lat || 0,
-          lng: place.lng || 0
+          lat: place.lat!,  // null이 아님을 확신할 수 있음 (위에서 필터링했으므로)
+          lng: place.lng!   // null이 아님을 확신할 수 있음 (위에서 필터링했으므로)
         },
         videoId: videoId
       }
@@ -259,7 +391,7 @@ class ApiClient {
   async getVideoFromDB(videoId: string): Promise<{id: string; title: string; thumbnail: string} | null> {
     try {
       return this.makeRequest<{id: string; title: string; thumbnail: string}>(`/api/v1/youtube/video/${videoId}`);
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -274,14 +406,14 @@ class ApiClient {
     };
   }
 
-  // YouTube URL에서 비디오 ID 추출
+  // Extract video ID from YouTube URL
   extractVideoId(url: string): string | null {
     const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
     const match = url.match(regex);
     return match ? match[1] : null;
   }
 
-  // JWT 인증 관련 함수들
+  // JWT authentication related functions
   async login(email: string, password: string): Promise<AuthResponse> {
     const response = await fetch(`${this.baseUrl}/auth/login`, {
       method: 'POST',
@@ -291,7 +423,7 @@ class ApiClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || '이메일 또는 비밀번호가 올바르지 않습니다.');
+      throw new Error(errorData.message || 'Invalid email or password.');
     }
 
     return response.json();
@@ -306,11 +438,11 @@ class ApiClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || '회원가입 중 오류가 발생했습니다.');
+      throw new Error(errorData.message || 'An error occurred during signup.');
     }
   }
 
-  // JWT 토큰 저장 및 관리
+  // JWT token storage and management
   saveAuthToken(token: string, tokenType: string = 'Bearer', userEmail: string = ''): void {
     sessionStorage.setItem('jwt_token', token);
     sessionStorage.setItem('token_type', tokenType);

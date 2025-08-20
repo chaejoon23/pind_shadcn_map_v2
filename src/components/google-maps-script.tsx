@@ -30,7 +30,7 @@ export function GoogleMapsScript({ onLoad, onError }: GoogleMapsScriptProps) {
     onLoad?.()
   }
 
-  const handleError = (error?: any) => {
+  const handleError = (error?: Error | Event | string) => {
     console.error("Google Maps script failed to load:", error)
     isGoogleMapsScriptLoading = false
     

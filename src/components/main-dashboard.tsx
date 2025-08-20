@@ -59,6 +59,7 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
   const [currentStep, setCurrentStep] = useState('')
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const initialUrlProcessed = useRef(false)
+  const initializationAttempted = useRef(false)
   const [initializationComplete, setInitializationComplete] = useState(false)
 
   // 컴포넌트 마운트 시 인증 상태 확인 및 히스토리 불러오기
@@ -101,43 +102,62 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
 
   // Process initial URL and locations when component mounts
   useEffect(() => {
-    if (initializationComplete && initialUrl && initialLocations && !initialUrlProcessed.current) {
+    // 초기화가 완료되고, 초기 URL이 있고, 아직 처리되지 않은 경우에만 실행
+    if (!initializationComplete || !initialUrl || initialUrlProcessed.current || initializationAttempted.current) {
+      return
+    }
+
+    initializationAttempted.current = true
+    
+    if (initialLocations) {
+      // 이미 위치 데이터가 있는 경우 (직접 전달된 경우)
       const processInitialData = async () => {
-        const videoId = apiClient.extractVideoId(initialUrl) || 'unknown'
-        
-        const newVideo: VideoData = {
-          id: videoId,
-          title: `YouTube Video - ${videoId}`,
-          thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
-          date: new Date().toISOString().split('T')[0],
-          locations: initialLocations
-        }
-      
-        // 로그인 사용자만 지원: 히스토리에 추가하거나 업데이트
-        setMockVideos(prev => {
-          const existing = prev.find(v => v.id === videoId)
-          if (existing) {
-            return prev.map(v => v.id === videoId ? newVideo : v)
+        try {
+          const videoId = apiClient.extractVideoId(initialUrl) || 'unknown'
+          
+          const newVideo: VideoData = {
+            id: videoId,
+            title: `YouTube Video - ${videoId}`,
+            thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+            date: new Date().toISOString().split('T')[0],
+            locations: initialLocations
           }
-          return [newVideo, ...prev]
-        })
-        setSelectedVideos([videoId])
-        initialUrlProcessed.current = true // 성공 시에만 플래그 설정
+        
+          // 로그인 사용자만 지원: 히스토리에 추가하거나 업데이트
+          setMockVideos(prev => {
+            const existing = prev.find(v => v.id === videoId)
+            if (existing) {
+              return prev.map(v => v.id === videoId ? newVideo : v)
+            }
+            return [newVideo, ...prev]
+          })
+          setSelectedVideos([videoId])
+          initialUrlProcessed.current = true
+          console.log('초기 위치 데이터 처리 완료:', initialLocations.length, 'locations')
+        } catch (error) {
+          console.error('Initial data processing failed:', error)
+          initializationAttempted.current = false // 재시도 허용
+        }
       }
       
       processInitialData()
-    } else if (initializationComplete && initialUrl && !initialUrlProcessed.current) {
+    } else {
+      // URL만 있는 경우, API 호출 필요
       const processInitialUrl = async () => {
+        console.log('초기 URL 처리 시작:', initialUrl)
         try {
           const response = await apiClient.processYouTubeURL(initialUrl)
           const videoId = apiClient.extractVideoId(initialUrl) || 'unknown'
           const locations = apiClient.convertApiPlacesToLocations(response.places, videoId)
           
+          console.log('API 응답 받음:', response.places?.length || 0, 'places from server')
+          console.log('변환된 위치:', locations.length, 'locations')
+          
           if (videoId && locations.length > 0) {
             const newVideo: VideoData = {
               id: videoId,
-              title: `YouTube Video - ${videoId}`,
-              thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+              title: response.video_title || `YouTube Video - ${videoId}`,
+              thumbnail: response.video_thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
               date: new Date().toISOString().split('T')[0],
               locations
             }
@@ -152,11 +172,25 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
               setMockVideos([newVideo])
             }
             setSelectedVideos([videoId])
-            initialUrlProcessed.current = true // 성공 시에만 플래그 설정
+            initialUrlProcessed.current = true
+            console.log('초기 URL 처리 완료, 위치 추가됨')
+          } else if (videoId) {
+            console.log('위치를 찾을 수 없음:', locations.length)
+            alert("0 places found")
+            initialUrlProcessed.current = true
           }
         } catch (error) {
           console.error('Initial URL processing failed:', error)
-          // 실패 시 플래그를 설정하지 않아서 재시도 가능
+          // 실패 시 재시도를 위해 플래그 리셋
+          initializationAttempted.current = false
+          
+          // 5초 후 재시도
+          setTimeout(() => {
+            if (!initialUrlProcessed.current) {
+              console.log('초기 URL 처리 재시도')
+              initializationAttempted.current = false
+            }
+          }, 5000)
         }
       }
       processInitialUrl()
@@ -256,6 +290,12 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
       
       const locations = apiClient.convertApiPlacesToLocations(response.places, videoId)
       
+      // Check if no places were found
+      if (locations.length === 0) {
+        alert("0 places found")
+        return // Don't save to history
+      }
+      
       // 서버에서 video_title을 제공하지 않는 경우, 클라이언트에서 제목을 가져옴
       let finalTitle = response.video_title || videoDataForAnalysis.title
       
@@ -310,13 +350,13 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     } catch (error) {
       console.error('Video processing error:', error)
       const errorMessage = error instanceof Error ? error.message : String(error)
-      alert(`비디오 분석 중 오류가 발생했습니다.\n\n오류 내용: ${errorMessage}\n\n백엔드 서버와 Celery Worker가 정상 실행 중인지 확인해주세요.`)
+      alert(`An error occurred during video analysis.`)
     } finally {
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current)
       }
       setAnalysisProgress(100)
-      setCurrentStep('완료')
+      setCurrentStep('Completed')
       setTimeout(() => {
         setIsAnalyzing(false)
         setAnalyzingVideo(null)
