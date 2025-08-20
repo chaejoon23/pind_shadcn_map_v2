@@ -6,78 +6,15 @@ import { Tag } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Search, Link2 } from 'lucide-react'
+import { apiClient } from "@/lib/api"
 
 // Google Maps type declaration
-interface LatLng {
-  lat: () => number
-  lng: () => number
+declare global {
+  interface Window {
+    google: typeof google
+  }
+  var google: any
 }
-
-interface LatLngBounds {
-  extend: (latLng: LatLng) => void
-  getNorthEast: () => LatLng
-  getSouthWest: () => LatLng
-}
-
-interface Size {
-  width: number
-  height: number
-}
-
-interface Point {
-  x: number
-  y: number
-}
-
-interface GoogleMap {
-  setCenter: (latLng: { lat: number; lng: number }) => void
-  setZoom: (zoom: number) => void
-  getZoom: () => number
-  fitBounds: (bounds: LatLngBounds) => void
-  addListener: (event: string, callback: () => void) => void
-}
-
-interface GoogleMarker {
-  setPosition: (latLng: { lat: number; lng: number }) => void
-  getPosition: () => LatLng
-  setVisible: (visible: boolean) => void
-  setIcon: (icon: unknown) => void
-  addListener: (event: string, callback: () => void) => void
-  setMap: (map: GoogleMap | null) => void
-}
-
-interface InfoWindow {
-  setContent: (content: string) => void
-  setPosition: (position: { lat: number; lng: number }) => void
-  open: (map: GoogleMap, anchor?: GoogleMarker) => void
-  close: () => void
-  setOptions: (options: Record<string, unknown>) => void
-}
-
-interface MapsEvent {
-  clearInstanceListeners: (instance: unknown) => void
-  addListener: (instance: unknown, event: string, callback: () => void) => unknown
-  removeListener: (listener: unknown) => void
-}
-
-interface GoogleMaps {
-  Map: new (element: HTMLElement, options: Record<string, unknown>) => GoogleMap
-  Marker: new (options: Record<string, unknown>) => GoogleMarker
-  InfoWindow: new (options?: Record<string, unknown>) => InfoWindow
-  LatLng: new (lat: number, lng: number) => LatLng
-  LatLngBounds: new () => LatLngBounds
-  Size: new (width: number, height: number) => Size
-  Point: new (x: number, y: number) => Point
-  event: MapsEvent
-  [key: string]: unknown
-}
-
-interface GoogleAPI {
-  maps: GoogleMaps
-  [key: string]: unknown
-}
-
-// Google 타입은 google-maps-api.ts에서 선언됨
 
 interface MapViewProps {
   locations: LocationData[]
@@ -91,11 +28,12 @@ interface MapViewProps {
   videos?: Array<{ id: string; title: string; thumbnail: string }>
 }
 
-export function MapView({ locations, selectedLocation, onPinClick, onPinHover, onProcessUrl, isAnalyzing, analysisProgress, videos = [] }: MapViewProps) {
+export function MapView({ locations, selectedLocation, onPinClick, onPinHover, onProcessUrl, onNavigateHome, isAnalyzing, analysisProgress, videos = [] }: MapViewProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [hoveredLocation, setHoveredLocation] = useState<LocationData | null>(null)
-  const [googleMap, setGoogleMap] = useState<GoogleMap | null>(null)
-  const [markers, setMarkers] = useState<GoogleMarker[]>([])
+  const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null)
+  const [googleMap, setGoogleMap] = useState<any>(null)
+  const [markers, setMarkers] = useState<any[]>([])
   const [isMapLoaded, setIsMapLoaded] = useState(false)
   const [userZoomed, setUserZoomed] = useState(false)
   const [videoUrl, setVideoUrl] = useState("")
@@ -114,17 +52,17 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
       }
       // 검색 완료 후 입력창 비우기
       setVideoUrl("")
-    } catch {
+    } catch (error) {
       // URL 처리 오류 발생
     }
   }
 
   // Load Google Maps API directly with better error handling
   const loadGoogleMapsAPI = () => {
-    return new Promise<GoogleAPI>((resolve, reject) => {
+    return new Promise<any>((resolve, reject) => {
       // Check if already loaded
-      if (window.google && window.google.maps && (window.google as GoogleAPI).maps.Map) {
-        resolve(window.google as GoogleAPI)
+      if (window.google && window.google.maps && window.google.maps.Map) {
+        resolve(window.google)
         return
       }
 
@@ -135,12 +73,12 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
       }
 
       // Check if script already exists
-      const existingScript = document.querySelector('script[data-google-maps-api="true"]')
+      let existingScript = document.querySelector('script[data-google-maps-api="true"]')
       if (existingScript) {
         // Wait for existing script to load
         const checkLoaded = () => {
-          if (window.google && window.google.maps && (window.google as GoogleAPI).maps.Map) {
-            resolve(window.google as GoogleAPI)
+          if (window.google && window.google.maps && window.google.maps.Map) {
+            resolve(window.google)
           } else {
             setTimeout(checkLoaded, 100)
           }
@@ -158,8 +96,8 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
       script.onload = () => {
         // Wait for API to be fully available
         const checkLoaded = () => {
-          if (window.google && window.google.maps && (window.google as GoogleAPI).maps.Map) {
-            resolve(window.google as GoogleAPI)
+          if (window.google && window.google.maps && window.google.maps.Map) {
+            resolve(window.google)
           } else {
             setTimeout(checkLoaded, 100)
           }
@@ -175,8 +113,8 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
 
       try {
         document.head.appendChild(script)
-      } catch (err) {
-        reject(err)
+      } catch (error) {
+        reject(error)
       }
     })
   }
@@ -184,8 +122,7 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
   // Initialize Google Maps
   useEffect(() => {
     let isMounted = true
-    let mapInstance: GoogleMap | null = null
-    const currentMapRef = mapRef.current
+    let mapInstance: any = null
     
     const initializeMap = async () => {
       try {
@@ -227,7 +164,7 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
             })
           }
         }
-      } catch {
+      } catch (error) {
         // Google Maps 초기화 실패
       }
     }
@@ -242,20 +179,20 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
       if (mapInstance) {
         try {
           // Remove all event listeners
-          if (window.google && window.google.maps && (window.google as GoogleAPI).maps.event) {
-            (window.google as GoogleAPI).maps.event.clearInstanceListeners(mapInstance)
+          if (window.google && window.google.maps && window.google.maps.event) {
+            window.google.maps.event.clearInstanceListeners(mapInstance)
           }
-        } catch {
+        } catch (error) {
           // Ignore cleanup errors
         }
         mapInstance = null
       }
       
       // Clean up DOM content
-      if (currentMapRef) {
+      if (mapRef.current) {
         try {
-          currentMapRef.innerHTML = ''
-        } catch {
+          mapRef.current.innerHTML = ''
+        } catch (error) {
           // Ignore cleanup errors
         }
       }
@@ -266,16 +203,12 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
     }
   }, [])
 
-  // Reset userZoomed when locations change to allow new bounds fitting
-  useEffect(() => {
-    setUserZoomed(false)
-  }, [locations])
-
   // Update markers when locations change
   useEffect(() => {
-    if (!googleMap || !isMapLoaded || !window.google || !(window.google as GoogleAPI).maps) return
+    if (!googleMap || !isMapLoaded || !window.google || !window.google.maps) return
 
-    // Only reset userZoomed when locations actually change (not on every render)
+    // Reset userZoomed when locations change, allowing fitBounds to run again
+    setUserZoomed(false)
 
     // Clear existing markers safely
     markers.forEach(marker => {
@@ -284,10 +217,10 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
           marker.setMap(null)
         }
         // Clear event listeners
-        if ((window.google as GoogleAPI)?.maps?.event && marker) {
-          (window.google as GoogleAPI).maps.event.clearInstanceListeners(marker)
+        if (window.google?.maps?.event && marker) {
+          window.google.maps.event.clearInstanceListeners(marker)
         }
-      } catch {
+      } catch (error) {
         // Ignore marker cleanup errors - this is expected in some cases
       }
     })
@@ -299,8 +232,8 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
 
     const newMarkers = locations.map((location) => {
       const isSelected = selectedLocation?.id === location.id
-      const isHighlighted = 'isHighlighted' in location && (location as unknown as { isHighlighted: boolean }).isHighlighted
-      const overlapCount = 'overlapCount' in location ? (location as unknown as { overlapCount: number }).overlapCount : 1
+      const isHighlighted = (location as any).isHighlighted
+      const overlapCount = (location as any).overlapCount || 1
       
       // 중복 위치에 따른 색상 결정
       let markerColor = "#ef4444" // 기본 빨간색
@@ -313,7 +246,7 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
       // 중복 횟수에 따른 크기 조정
       const markerSize = isHighlighted ? Math.min(32 + (overlapCount * 4), 48) : 32
       
-      const marker = new (window.google as GoogleAPI).maps.Marker({
+      const marker = new window.google.maps.Marker({
         position: { lat: location.coordinates.lat, lng: location.coordinates.lng },
         map: googleMap,
         title: `${location.name}${isHighlighted ? ` (${overlapCount}개 비디오)` : ''}`,
@@ -324,8 +257,8 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
               ${isHighlighted ? `<text x="12" y="9" text-anchor="middle" font-family="Arial, sans-serif" font-size="4" font-weight="bold" fill="white">${overlapCount}</text>` : ''}
             </svg>
           `),
-          scaledSize: new (window.google as GoogleAPI).maps.Size(markerSize, markerSize) as Size,
-          anchor: new (window.google as GoogleAPI).maps.Point(markerSize/2, markerSize) as Point
+          scaledSize: new window.google.maps.Size(markerSize, markerSize),
+          anchor: new window.google.maps.Point(markerSize/2, markerSize)
         }
       })
 
@@ -352,7 +285,7 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
       }
 
       // Create InfoWindow for this marker
-      const infoWindow = new (window.google as GoogleAPI).maps.InfoWindow({
+      const infoWindow = new window.google.maps.InfoWindow({
         content: `
           <style>
             .gm-style-iw-c {
@@ -478,7 +411,7 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
         `,
         disableAutoPan: true,
         maxWidth: 300,
-        pixelOffset: new (window.google as GoogleAPI).maps.Size(0, -10) as Size,
+        pixelOffset: new window.google.maps.Size(0, -10),
         disableCloseOnClick: true
       })
 
@@ -511,8 +444,8 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
                 <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#DC2626"/>
               </svg>
             `),
-          scaledSize: new (window.google as GoogleAPI).maps.Size(36, 36) as Size,
-          anchor: new (window.google as GoogleAPI).maps.Point(18, 36) as Point
+          scaledSize: new window.google.maps.Size(36, 36),
+          anchor: new window.google.maps.Point(18, 36)
         }
         marker.setIcon(hoverIcon)
       })
@@ -537,8 +470,8 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
                 <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#ef4444"/>
               </svg>
             `),
-          scaledSize: new (window.google as GoogleAPI).maps.Size(32, 32) as Size,
-          anchor: new (window.google as GoogleAPI).maps.Point(16, 32) as Point
+          scaledSize: new window.google.maps.Size(32, 32),
+          anchor: new window.google.maps.Point(16, 32)
         }
         marker.setIcon(normalIcon)
       })
@@ -550,14 +483,15 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
 
     // Fit bounds to show all markers, only if user hasn't manually zoomed
     if (newMarkers.length > 0 && !userZoomed) {
-      const bounds = new (window.google as GoogleAPI).maps.LatLngBounds() as LatLngBounds
+      const bounds = new window.google.maps.LatLngBounds()
       newMarkers.forEach(marker => bounds.extend(marker.getPosition()!))
       googleMap.fitBounds(bounds)
       
-      // Use setTimeout to prevent immediate re-execution
-      setTimeout(() => {
-        setUserZoomed(true)
-      }, 100)
+      // Ensure minimum zoom level
+      const listener = window.google.maps.event.addListener(googleMap, "idle", () => {
+        if (googleMap.getZoom()! > 15) googleMap.setZoom(15)
+        window.google.maps.event.removeListener(listener)
+      })
     }
 
     // Cleanup function for markers
@@ -568,15 +502,15 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
             marker.setMap(null)
           }
           // Clear event listeners
-          if ((window.google as GoogleAPI)?.maps?.event && marker) {
-            (window.google as GoogleAPI).maps.event.clearInstanceListeners(marker)
+          if (window.google?.maps?.event && marker) {
+            window.google.maps.event.clearInstanceListeners(marker)
           }
-        } catch {
+        } catch (error) {
           // Ignore cleanup errors - this is expected in some cases
         }
       })
     }
-  }, [googleMap, locations, selectedLocation, isMapLoaded, videos])
+  }, [googleMap, locations, selectedLocation, isMapLoaded, onPinClick, onPinHover])
 
   return (
     <div className="h-full relative bg-gray-100">
@@ -649,7 +583,7 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
               <div className="w-16 h-16 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
               <h3 className="text-xl font-bold text-black mb-2">Analyzing Video</h3>
               <p className="text-gray-600 text-sm leading-relaxed mb-4">
-                We&apos;re extracting locations from the YouTube video. This may take a moment...
+                We're extracting locations from the YouTube video. This may take a moment...
               </p>
               <div className="w-full bg-gray-200 rounded-full h-2.5 border-2 border-black">
                 <div 

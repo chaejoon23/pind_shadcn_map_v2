@@ -30,7 +30,7 @@ export function GoogleMapsScript({ onLoad, onError }: GoogleMapsScriptProps) {
     onLoad?.()
   }
 
-  const handleError = (error?: Error | Event) => {
+  const handleError = (error?: any) => {
     console.error("Google Maps script failed to load:", error)
     isGoogleMapsScriptLoading = false
     
@@ -88,7 +88,7 @@ export const isGoogleMapsLoaded = () => {
 }
 
 // Promise-based loader
-export const waitForGoogleMaps = (): Promise<typeof window.google> => {
+export const waitForGoogleMaps = (): Promise<typeof google> => {
   return new Promise((resolve, reject) => {
     console.log("waitForGoogleMaps called", {
       isLoaded: isGoogleMapsLoaded(),

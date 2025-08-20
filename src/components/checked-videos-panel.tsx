@@ -2,20 +2,31 @@
 
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { X, MapPin, ExternalLink } from 'lucide-react'
-import type { VideoData } from "@/components/main-dashboard"
+import { Separator } from "@/components/ui/separator"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { X, MapPin, Tag, ExternalLink, AlertCircle } from 'lucide-react'
+import { useState } from "react"
+import type { VideoData, LocationData as Location } from "@/components/main-dashboard"
+import { OverlappingLocations } from "./overlapping-locations"
 
 interface CheckedVideosPanelProps {
   videos: VideoData[]
   selectedVideos: string[]
+  clickedVideo: VideoData | null
   onClose: () => void
 }
 
 export function CheckedVideosPanel({
   videos,
   selectedVideos,
+  clickedVideo,
   onClose,
 }: CheckedVideosPanelProps) {
+  const [creationStatus, setCreationStatus] = useState<{
+    type: "success" | "error" | null
+    message: string
+    link?: string
+  }>({ type: null, message: "" })
 
   // Get all selected videos
   const checkedVideos = videos.filter((video) =>
@@ -25,6 +36,43 @@ export function CheckedVideosPanel({
   // Get all locations from checked videos
   const allLocations = checkedVideos.flatMap((video) => video.locations)
 
+  // Calculate overlapping locations: locations that appear in multiple videos
+  const overlappingLocations = (() => {
+    if (checkedVideos.length < 2) return []
+    
+    // Helper function to check if two locations overlap by coordinates
+    const locationsOverlap = (loc1: Location, loc2: Location) => {
+      return Math.abs(loc1.coordinates.lat - loc2.coordinates.lat) < 0.001 &&
+             Math.abs(loc1.coordinates.lng - loc2.coordinates.lng) < 0.001
+    }
+    
+    // Find locations that appear in multiple videos
+    const overlaps: Location[] = []
+    const processedCoords = new Set<string>()
+    
+    for (const location of allLocations) {
+      const coordKey = `${location.coordinates.lat.toFixed(3)},${location.coordinates.lng.toFixed(3)}`
+      
+      if (processedCoords.has(coordKey)) continue
+      processedCoords.add(coordKey)
+      
+      // Count how many different videos mention this location (by coordinates)
+      const matchingLocations = allLocations.filter(loc => locationsOverlap(loc, location))
+      const uniqueVideoIds = new Set(matchingLocations.map(loc => loc.videoId))
+      
+      // Only include if this location appears in 2 or more different videos
+      if (uniqueVideoIds.size > 1) {
+        // Add overlap count information to the location
+        const locationWithCount = {
+          ...location,
+          overlapCount: uniqueVideoIds.size
+        }
+        overlaps.push(locationWithCount)
+      }
+    }
+    
+    return overlaps
+  })()
 
   return (
     <div className="h-full bg-white border-r-4 border-black flex flex-col animate-in slide-in-from-left duration-300 overflow-hidden">
@@ -66,7 +114,7 @@ export function CheckedVideosPanel({
                 </p>
               </div>
             ) : (
-              checkedVideos.map((video) => (
+              checkedVideos.map((video, videoIndex) => (
                 <div key={video.id}>
                   {/* Video title header */}
                   <div className="relative my-4">

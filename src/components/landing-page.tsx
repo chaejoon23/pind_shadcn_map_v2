@@ -3,11 +3,10 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { MapPin, Search, Play, Link2 } from 'lucide-react'
+import { Card, CardContent } from "@/components/ui/card"
+import { MapPin, Clock, Search, Play, Link2, Bookmark } from 'lucide-react'
 import { apiClient } from "@/lib/api"
 import type { LocationData } from "@/components/main-dashboard"
-import TextType from "@/components/animations/TextType"
-import "@/components/animations/TextType.css"
 
 interface LandingPageProps {
   onAnalyzeVideo: (url: string, locations?: LocationData[]) => void
@@ -21,7 +20,6 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth, onNavigateToDashboard 
   const [error, setError] = useState("")
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
-  const [isFocused, setIsFocused] = useState(false)
 
   // 컴포넌트 마운트 시 로그인 상태 확인
   useEffect(() => {
@@ -57,7 +55,9 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth, onNavigateToDashboard 
 
     try {
       // JWT 토큰과 함께 YouTube URL 전송
-      const response = await apiClient.processYouTubeURL(videoUrl)
+      const isAuthenticated = apiClient.isAuthenticated()
+      
+      const response = await apiClient.processYouTubeURL(videoUrl, isAuthenticated)
       
       // API 응답을 앱에서 사용하는 형식으로 변환
       const videoId = apiClient.extractVideoId(videoUrl)
@@ -86,7 +86,7 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth, onNavigateToDashboard 
       {/* Header */}
       <header className="w-full px-6 py-4 flex items-center justify-between border-b-2 border-black">
         <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center animate-bounce">
+          <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
             <MapPin className="w-5 h-5 text-white" />
           </div>
           <span className="text-xl font-bold text-black">Pind</span>
@@ -156,35 +156,13 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth, onNavigateToDashboard 
               <Link2 className="w-5 h-5" />
             </div>
             
-
-            <div className="flex-1 relative">
-              <Input
-                type="url"
-                value={videoUrl}
-                onChange={(e) => setVideoUrl(e.target.value)}
-                onFocus={() => setIsFocused(true)}
-                onBlur={() => setIsFocused(false)}
-                className="flex-1 border-0 bg-transparent text-lg focus-visible:ring-0 focus-visible:ring-offset-0 py-6 text-black w-full"
-                placeholder=""
-              />
-              {!videoUrl && !isFocused && (
-                <div className="absolute inset-0 pointer-events-none flex items-center">
-                  <div className="text-lg text-black ml-0">
-                    <TextType
-                      text="Paste a YouTube URL to get started..."
-                      typingSpeed={50}
-                      initialDelay={0}
-                      showCursor={true}
-                      cursorCharacter="|"
-                      cursorClassName="text-black"
-                      loop={false}
-                      className="inline text-black"
-                      textColors={["#000000"]}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
+            <Input
+              type="url"
+              placeholder="Paste a YouTube URL to get started..."
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              className="flex-1 border-0 bg-transparent text-lg placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 py-6 text-black"
+            />
             
             <div className="flex items-center space-x-2 pr-2">
               <Button

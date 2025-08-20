@@ -24,11 +24,14 @@ interface HistorySidebarProps {
 
 export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoClick, onNavigateHome, onShowAuth, isAnalyzing, analyzingVideo, analysisProgress, currentStep }: HistorySidebarProps) {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
     const checkAuthStatus = () => {
       const authenticated = apiClient.isAuthenticated()
+      const email = apiClient.getUserEmail()
       setIsLoggedIn(authenticated)
+      setUserEmail(email)
     }
     
     checkAuthStatus()
@@ -104,12 +107,12 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
                     {analyzingVideo.title}
                   </h3>
                   <div className="text-xs mt-1 font-medium text-gray-600">
-                    <p>Analyzing... {analysisProgress ?? 0}%</p>
+                    <p>Analyzing... {analysisProgress}%</p>
                     {currentStep && (
                       <p className="text-xs text-gray-500 mt-1">
-                        {(analysisProgress ?? 0) <= 25 ? 'Sending...' :
-                         (analysisProgress ?? 0) <= 75 ? 'Analyzing...' :
-                         (analysisProgress ?? 0) <= 95 ? 'Marking on map...' : 'Completed'}
+                        {analysisProgress <= 25 ? 'Sending...' :
+                         analysisProgress <= 75 ? 'Analyzing...' :
+                         analysisProgress <= 95 ? 'Marking on map...' : 'Completed'}
                       </p>
                     )}
                     <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
@@ -241,9 +244,9 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
                   <p>Analyzing... {analysisProgress}%</p>
                   {currentStep && (
                     <p className="text-xs text-gray-500 mt-1">
-                      {(analysisProgress ?? 0) <= 25 ? 'Sending...' :
-                       (analysisProgress ?? 0) <= 75 ? 'Analyzing...' :
-                       (analysisProgress ?? 0) <= 95 ? 'Marking on map...' : 'Completed'}
+                      {analysisProgress <= 25 ? 'Sending...' :
+                       analysisProgress <= 75 ? 'Analyzing...' :
+                       analysisProgress <= 95 ? 'Marking on map...' : 'Completed'}
                     </p>
                   )}
                   <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
