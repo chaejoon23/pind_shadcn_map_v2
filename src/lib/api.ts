@@ -42,26 +42,11 @@ export interface ApiResponse {
   video_thumbnail?: string;
 }
 
-export interface JobResponse {
-  job_id: string;
-}
-
-export interface JobStatusResponse {
-  job_id: string;
-  status: string;
-  progress: number;
-  current_step: string;
-}
-
-export interface JobResultResponse {
-  job_id: string;
-  status: string;
+export interface PlaceResponse {
+  mode: 'db' | 'new';
   places: ApiPlace[];
-  video_title?: string;
-  video_thumbnail?: string;
-  processing_time?: number;
-  error_message?: string;
 }
+
 
 export interface UserHistoryItem {
   id: string;
@@ -137,166 +122,30 @@ class ApiClient {
   }
 
   async processYouTubeURL(
-    url: string, 
-    onProgressUpdate?: (progress: number, currentStep: string) => void
+    url: string
   ): Promise<ApiResponse> {
     
-    // Step 1: Submit job
     console.log('Submitting YouTube URL for processing:', url);
-    const jobResponse = await this.makeRequest<JobResponse>('/api/v1/youtube/process', {
+    
+    // 서버에서 직접 결과를 반환하므로 동기 처리
+    const response = await this.makeRequest<PlaceResponse>('/api/v1/youtube/process', {
       method: 'POST',
       body: JSON.stringify({ url }),
     });
-    console.log('Job submitted successfully, job_id:', jobResponse.job_id);
-
-    // Step 2: Check if it's a cached result or needs polling
-    if (jobResponse.job_id.startsWith('cached_')) {
-      // Handle cached results directly
-      console.log('Handling cached result for job:', jobResponse.job_id);
-      return this.handleCachedResult(jobResponse.job_id);
-    } else {
-      // Poll for completion for new jobs
-      return this.pollForJobCompletion(jobResponse.job_id, onProgressUpdate);
-    }
-  }
-
-  private async handleCachedResult(jobId: string): Promise<ApiResponse> {
-    // Extract video ID from cached job ID (cached_videoId format)
-    const videoId = jobId.replace('cached_', '');
-    console.log('Fetching cached result for video:', videoId);
     
-    try {
-      // Server returns List[Place] directly, not PlacesWithVideoResponse
-      console.log('Attempting to fetch cached data from:', `/api/v1/youtube/places/${videoId}`);
-      const places = await this.makeRequest<ApiPlace[]>(`/api/v1/youtube/places/${videoId}`);
-      
-      console.log('Cached places received:', {
-        placesCount: places?.length || 0,
-        places: places
-      });
-      
-      return {
-        mode: 'db',
-        places: places || [],
-        video_title: `YouTube Video - ${videoId}`,
-        video_thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
-      };
-    } catch (error) {
-      console.error('Failed to fetch cached result:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      
-      // "장소 정보가 없습니다" 오류는 정상 상황 (0개 위치)
-      if (errorMessage.includes('장소 정보가 없습니다') || errorMessage.includes('not found')) {
-        console.log('Video exists in DB but has no places - returning empty result');
-        return {
-          mode: 'db',
-          places: [],
-          video_title: `YouTube Video - ${videoId}`,
-          video_thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
-        };
-      }
-      
-      // 다른 오류의 경우 fallback 시도
-      try {
-        const resultResponse = await this.makeRequest<JobResultResponse>(`/api/v1/jobs/${jobId}/result`);
-        return {
-          mode: 'db',
-          places: resultResponse.places || [],
-          video_title: resultResponse.video_title || `YouTube Video - ${videoId}`,
-          video_thumbnail: resultResponse.video_thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
-        };
-      } catch (fallbackError) {
-        console.error('Fallback result fetch also failed:', fallbackError);
-        
-        // 최종적으로 빈 결과 반환 (오류 대신)
-        console.log('Returning empty result for cached video');
-        return {
-          mode: 'db',
-          places: [],
-          video_title: `YouTube Video - ${videoId}`,
-          video_thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
-        };
-      }
-    }
+    console.log('URL processing completed:', response);
+    
+    // 비디오 ID 추출하여 썸네일 생성
+    const videoId = this.extractVideoId(url);
+    
+    return {
+      mode: response.mode,
+      places: response.places,
+      video_title: videoId ? `YouTube Video - ${videoId}` : 'YouTube Video',
+      video_thumbnail: videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : undefined
+    };
   }
 
-  private async pollForJobCompletion(
-    jobId: string, 
-    onProgressUpdate?: (progress: number, currentStep: string) => void
-  ): Promise<ApiResponse> {
-    const pollInterval = 10000; // Check every 10 seconds
-    let retryCount = 0;
-    const maxRetries = 3;
-
-    while (true) {
-      try {
-        console.log(`Polling job ${jobId}, retry count: ${retryCount}`);
-        const statusResponse = await this.makeRequest<JobStatusResponse>(`/api/v1/jobs/${jobId}/status`);
-        
-        // Reset retry count on successful response
-        retryCount = 0;
-        
-        // Update progress callback if provided
-        if (onProgressUpdate) {
-          onProgressUpdate(statusResponse.progress, statusResponse.current_step);
-        }
-        
-        if (statusResponse.status === 'SUCCESS') {
-          const resultResponse = await this.makeRequest<JobResultResponse>(`/api/v1/jobs/${jobId}/result`);
-          console.log(`Job ${jobId} completed successfully, places:`, resultResponse.places?.length || 0);
-          return {
-            mode: 'new',
-            places: resultResponse.places || [],
-            video_title: resultResponse.video_title,
-            video_thumbnail: resultResponse.video_thumbnail
-          };
-        } else if (statusResponse.status === 'FAILURE') {
-          // Get detailed error from result endpoint
-          try {
-            const resultResponse = await this.makeRequest<JobResultResponse>(`/api/v1/jobs/${jobId}/result`);
-            const errorMessage = resultResponse.error_message || statusResponse.current_step || 'Unknown error';
-            console.error(`Job ${jobId} failed:`, errorMessage);
-            
-            // 특정 AI 모델 안전 필터 오류에 대한 사용자 친화적 메시지
-            if (errorMessage.includes('finish_reason') && errorMessage.includes('2')) {
-              throw new Error('Google AI 안전 필터로 인해 처리할 수 없습니다. 다른 비디오나 짧은 구간을 시도해보세요. (Safety filter triggered)');
-            }
-            if (errorMessage.includes('response.text') && errorMessage.includes('valid Part')) {
-              throw new Error('AI 모델 응답 오류입니다. 서버 관리자에게 문의하거나 다른 비디오를 시도해보세요. (Empty AI response)');
-            }
-            if (errorMessage.includes('quota') || errorMessage.includes('limit')) {
-              throw new Error('API 사용량 한도에 도달했습니다. 잠시 후 다시 시도해보세요.');
-            }
-            
-            throw new Error(`비디오 처리 실패: ${errorMessage}`);
-          } catch (resultError) {
-            console.error(`Job ${jobId} failed (result fetch error):`, resultError);
-            throw new Error(`비디오 처리 중 오류가 발생했습니다. 다시 시도해보세요.`);
-          }
-        }
-
-        // Still processing, wait and try again
-        console.log(`Job ${jobId} still processing: ${statusResponse.current_step} (${statusResponse.progress}%)`);
-        await new Promise(resolve => setTimeout(resolve, pollInterval));
-      } catch (error) {
-        // If it's a network error or API error, continue polling with retry limit
-        if (error instanceof Error && error.message.includes('Job processing failed')) {
-          throw error;
-        }
-        
-        retryCount++;
-        console.log(`Network error during polling (attempt ${retryCount}/${maxRetries}):`, error);
-        
-        if (retryCount >= maxRetries) {
-          console.error(`Max retries reached for job ${jobId}`);
-          throw new Error(`Network error: Failed to poll job status after ${maxRetries} retries`);
-        }
-        
-        // For network errors, wait a bit longer and retry
-        await new Promise(resolve => setTimeout(resolve, pollInterval * 2));
-      }
-    }
-  }
 
   async getUserHistory(): Promise<VideoData[]> {
     const historyData = await this.makeRequest<UserHistoryItem[]>('/api/v1/users/history');

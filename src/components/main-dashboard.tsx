@@ -278,13 +278,11 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     // 클라이언트에서는 기본 제목 사용, 서버 응답에서 실제 제목 받아옴
     
     try {
-      const response = await apiClient.processYouTubeURL(
-        url, 
-        (progress: number, step: string) => {
-          setAnalysisProgress(progress)
-          setCurrentStep(step)
-        }
-      )
+      // 서버가 동기 처리하므로 즉시 완료 상태로 설정
+      setAnalysisProgress(100)
+      setCurrentStep('Processing...')
+      
+      const response = await apiClient.processYouTubeURL(url)
       
       // console.log('Server response:', response) // 서버 응답 확인용 로그 (필요시 주석 해제)
       
