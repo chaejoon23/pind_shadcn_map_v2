@@ -415,10 +415,16 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
         disableCloseOnClick: true
       })
 
-      // Add click event
+      // Add click event 
       marker.addListener('click', () => {
         onPinClick(location)
-        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.name)}`
+        // const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${location.name} ${location.coordinates.lat},${location.coordinates.lng}`)}`
+        // const query = encodeURIComponent(`${location.name}`)
+        // const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}&center=${location.coordinates.lat},${location.coordinates.lng}&zoom=15`
+        // 장소명과 좌표를 모두 포함한 검색 방식
+        const placeName = encodeURIComponent(location.name)
+        const coords = `${location.coordinates.lat},${location.coordinates.lng}`
+        const googleMapsUrl = `https://www.google.com/maps/search/${placeName}+${coords}/@${location.coordinates.lat},${location.coordinates.lng},15z`
         console.log('Opening Google Maps URL:', googleMapsUrl)
         window.open(googleMapsUrl, '_blank')
       })
@@ -602,7 +608,13 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
             <div 
               className="bg-white rounded-lg shadow-lg border p-3 max-w-xs animate-in fade-in-0 zoom-in-95 duration-150 cursor-pointer hover:shadow-xl transition-all"
               onClick={() => {
-                const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hoveredLocation.name)}`
+                // const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${hoveredLocation.name} ${hoveredLocation.coordinates.lat},${hoveredLocation.coordinates.lng}`)}`
+                // const query = encodeURIComponent(`${hoveredLocation.name}`)
+                // const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}&center=${hoveredLocation.coordinates.lat},${hoveredLocation.coordinates.lng}&zoom=15`
+                // 장소명과 좌표를 모두 포함한 검색 방식
+                const placeName = encodeURIComponent(hoveredLocation.name)
+                const coords = `${hoveredLocation.coordinates.lat},${hoveredLocation.coordinates.lng}`
+                const googleMapsUrl = `https://www.google.com/maps/search/${placeName}+${coords}/@${hoveredLocation.coordinates.lat},${hoveredLocation.coordinates.lng},15z`
                 console.log('Opening Google Maps URL:', googleMapsUrl)
                 window.open(googleMapsUrl, '_blank')
               }}

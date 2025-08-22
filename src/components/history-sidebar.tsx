@@ -23,6 +23,11 @@ interface HistorySidebarProps {
 }
 
 export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoClick, onNavigateHome, onShowAuth, isAnalyzing, analyzingVideo, analysisProgress, currentStep }: HistorySidebarProps) {
+  // Remove duplicate videos based on video.id
+  const uniqueVideos = videos.filter((video, index, arr) => 
+    arr.findIndex(v => v.id === video.id) === index
+  )
+  
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [, setUserEmail] = useState<string | null>(null)
 
@@ -37,9 +42,9 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
     checkAuthStatus()
   }, [])
 
-  // 비로그인 사용자: 현재 세션의 요청된 비디오만 표시
+  // 비로그인 사용자: 현재 세션의 요청된 비디오만 표시 / 수정
   if (!isLoggedIn) {
-    if (videos.length === 0) {
+    if (uniqueVideos.length === 0) {
       return (
         <div className="h-full bg-white border-r-4 border-black flex flex-col">
           <div className="p-4 border-b border-black">
@@ -126,7 +131,7 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
               </div>
             )}
             
-            {videos.map((video) => {
+            {uniqueVideos.map((video) => {
               const isSelected = selectedVideos.includes(video.id)
               return (
                 <div
@@ -260,11 +265,11 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
             </div>
           )}
           
-          {videos.map((video) => {
-            const isSelected = selectedVideos.includes(video.id)
+          {uniqueVideos.map((video) => {
+            const isSelected = selectedVideos.includes(video.title)
             return (
               <div
-                key={`mobile-${video.id}`}
+                key={`mobile-${video.title}`}
                 className="flex p-3 rounded-lg hover:bg-gray-100 transition-colors items-center space-x-3 border-2 border-transparent hover:border-black"
               >
                 <Checkbox

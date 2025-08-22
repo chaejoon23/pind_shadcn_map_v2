@@ -14,7 +14,12 @@ interface VideoHistoryListProps {
 }
 
 export function VideoHistoryList({ videos, selectedVideos, onVideoToggle }: VideoHistoryListProps) {
-  if (videos.length === 0) {
+  // Remove duplicate videos based on video.id
+  const uniqueVideos = videos.filter((video, index, arr) => 
+    arr.findIndex(v => v.id === video.id) === index
+  )
+  
+  if (uniqueVideos.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
         <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
@@ -35,7 +40,7 @@ export function VideoHistoryList({ videos, selectedVideos, onVideoToggle }: Vide
   return (
     <ScrollArea className="flex-1">
       <div className="space-y-2 p-4 px-4 py-0 my-0">
-        {videos.map((video) => (
+        {uniqueVideos.map((video) => (
           <div key={video.id} className="flex p-3 rounded-lg hover:bg-gray-50 transition-colors flex-row items-center space-x-3 mx-0 py-3">
             <Checkbox
               checked={selectedVideos.includes(video.id)}

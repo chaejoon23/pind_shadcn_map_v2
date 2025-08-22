@@ -115,7 +115,7 @@ export function CheckedVideosPanel({
               </div>
             ) : (
               checkedVideos.map((video, videoIndex) => (
-                <div key={video.id}>
+                <div key={`checked-${video.id}-${videoIndex}`}>
                   {/* Video title header */}
                   <div className="relative my-4">
                     <div className="border-t-2 border-black" />
@@ -130,13 +130,24 @@ export function CheckedVideosPanel({
                   <div className="space-y-3">
                     {video.locations.map((location) => (
                       <button
-                        key={location.id}
+                        key={`${video.id}-${location.id}`}
                         onClick={() => {
-                          const query = encodeURIComponent(
-                            `${location.name} ${location.address}`
-                          )
+                          // const query = encodeURIComponent(
+                          //   `${location.name} ${location.coordinates.lat},${location.coordinates.lng}`
+                          // )
+                          // window.open(
+                          //   `https://www.google.com/maps/search/${query}`,
+                          //   "_blank"
+                          // )
+                          // window.open(
+                          //   `https://www.google.com/maps/@${location.coordinates.lat},${location.coordinates.lng},15z`,
+                          //   "_blank"
+                          // )
+                          // 장소명과 좌표를 모두 포함한 검색 방식
+                          const placeName = encodeURIComponent(location.name)
+                          const coords = `${location.coordinates.lat},${location.coordinates.lng}`
                           window.open(
-                            `https://www.google.com/maps/search/${query}`,
+                            `https://www.google.com/maps/search/${placeName}+${coords}/@${location.coordinates.lat},${location.coordinates.lng},15z`,
                             "_blank"
                           )
                         }}

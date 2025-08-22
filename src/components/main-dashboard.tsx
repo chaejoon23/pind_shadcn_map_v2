@@ -50,7 +50,6 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
   const [showCheckedVideos, setShowCheckedVideos] = useState(false)
   const [clickedVideo, setClickedVideo] = useState<VideoData | null>(null)
   const [mockVideos, setMockVideos] = useState<VideoData[]>([])
-  const [sessionVideos, setSessionVideos] = useState<VideoData[]>([])
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string; avatar?: string } | undefined>(undefined)
   const [isAnalyzing, setIsAnalyzing] = useState(false) // URL 분석 상태
@@ -162,15 +161,8 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
               locations
             }
             
-            const currentlyLoggedIn = apiClient.isAuthenticated()
-            if (currentlyLoggedIn) {
-              // 로그인 사용자: 히스토리에 추가
-              setMockVideos(prev => [newVideo, ...prev])
-            } else {
-              // 비로그인 사용자: 세션 비디오로 설정
-              setSessionVideos([newVideo])
-              setMockVideos([newVideo])
-            }
+            // 로그인 사용자만 지원 
+            setMockVideos(prev => [newVideo, ...prev])
             setSelectedVideos([videoId])
             initialUrlProcessed.current = true
             console.log('초기 URL 처리 완료, 위치 추가됨')
@@ -251,19 +243,17 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     setShowCheckedVideos(true)
   }
 
-  // YouTube URL 처리 함수
+  // YouTube URL 처리 함수 - WebSocket 기반 (6단계)
   const processYouTubeURL = async (url: string) => {
     if (progressIntervalRef.current) {
       clearInterval(progressIntervalRef.current)
     }
 
-    const currentlyLoggedIn = apiClient.isAuthenticated()
     const videoId = apiClient.extractVideoId(url) || 'unknown'
-    
     
     const videoDataForAnalysis: VideoData = {
       id: videoId,
-      title: `YouTube Video - ${videoId}`, // 임시 제목, 나중에 업데이트
+      title: `YouTube Video - ${videoId}`,
       thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
       date: new Date().toISOString().split('T')[0],
       locations: []
@@ -273,93 +263,107 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     setSelectedVideos([])
     setIsAnalyzing(true)
     setAnalysisProgress(0)
-    setCurrentStep('')
-    
-    // 클라이언트에서는 기본 제목 사용, 서버 응답에서 실제 제목 받아옴
+    setCurrentStep('Starting...')
     
     try {
-      // 서버가 동기 처리하므로 즉시 완료 상태로 설정
-      setAnalysisProgress(100)
-      setCurrentStep('Processing...')
+      // WebSocket 연결
+      // const ws = new WebSocket('ws://localhost:8000/ws/process') 
+      const ws = new WebSocket('ws://192.168.18.123:8000/ws/process')
       
-      const response = await apiClient.processYouTubeURL(url)
-      
-      // console.log('Server response:', response) // 서버 응답 확인용 로그 (필요시 주석 해제)
-      
-      const locations = apiClient.convertApiPlacesToLocations(response.places, videoId)
-      
-      // Check if no places were found
-      if (locations.length === 0) {
-        alert("0 places found")
-        return // Don't save to history
+      ws.onopen = () => {
+        console.log('WebSocket connected')
+        // 처리 요청 전송
+        ws.send(JSON.stringify({
+          action: "process_url",
+          url: url,
+          user_id: isLoggedIn ? currentUser?.email : undefined
+        }))
       }
       
-      // 서버에서 video_title을 제공하지 않는 경우, 클라이언트에서 제목을 가져옴
-      let finalTitle = response.video_title || videoDataForAnalysis.title
-      
-      // 서버에서 제목이 없으면 YouTube oEmbed API를 통해 제목 시도 (프록시 없이)
-      if (!response.video_title || response.video_title === 'undefined') {
-        try {
-          // YouTube oEmbed API를 직접 호출 시도 (일부 브라우저에서는 작동할 수 있음)
-          const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
-          if (oembedResponse.ok) {
-            const oembedData = await oembedResponse.json()
-            finalTitle = oembedData.title || finalTitle
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data)
+        console.log('WebSocket progress:', data)
+        
+        if (data.status === 'processing') {
+          // 백엔드에서 받은 진행률과 메시지를 그대로 사용
+          setAnalysisProgress(data.progress)
+          setCurrentStep(data.message)
+        } else if (data.status === 'completed') {
+          // 처리 완료
+          setAnalysisProgress(100)
+          setCurrentStep('Completed')
+          ws.close()
+          
+          const response = data.result
+          
+          // 결과 처리
+          const locations = apiClient.convertApiPlacesToLocations(response.places, videoId)
+          
+          // Check if no places were found
+          if (locations.length === 0) {
+            alert("0 places found")
+            setIsAnalyzing(false)
+            setAnalyzingVideo(null)
+            return
           }
-        } catch (error) {
-          // CORS 오류 무시하고 기본 제목 유지 (정상적인 동작)
+          
+          // 최종 비디오 데이터 생성
+          const finalTitle = response.video_title || videoDataForAnalysis.title
+          const finalVideo: VideoData = {
+            ...videoDataForAnalysis,
+            title: finalTitle,
+            thumbnail: response.video_thumbnail || videoDataForAnalysis.thumbnail,
+            locations
+          }
+          
+          // 히스토리에 추가
+          setMockVideos(prev => {
+            const existing = prev.find(v => v.id === videoId)
+            if (existing) {
+              return prev.map(v => v.id === videoId ? finalVideo : v)
+            }
+            return [finalVideo, ...prev]
+          })
+          
+          setSelectedVideos([videoId])
+          
+          // 완료 후 정리
+          setTimeout(() => {
+            setIsAnalyzing(false)
+            setAnalyzingVideo(null)
+            setCurrentStep('')
+          }, 1000)
+          
+        } else if (data.status === 'error') {
+          // 에러 처리
+          console.error('WebSocket error:', data.message)
+          alert(`An error occurred during video analysis: ${data.message}`)
+          ws.close()
+          setIsAnalyzing(false)
+          setAnalyzingVideo(null)
+          setCurrentStep('')
         }
       }
       
-      const finalVideo: VideoData = {
-        ...videoDataForAnalysis,
-        title: finalTitle,
-        thumbnail: response.video_thumbnail || videoDataForAnalysis.thumbnail,
-        locations
-      }
-      
-      if (currentlyLoggedIn) {
-        setMockVideos(prev => {
-          const existing = prev.find(v => v.id === videoId)
-          if (existing) {
-            return prev.map(v => v.id === videoId ? finalVideo : v)
-          }
-          return [finalVideo, ...prev]
-        })
-      } else {
-        setSessionVideos(prev => {
-          const existing = prev.find(v => v.id === videoId)
-          if (existing) {
-            return prev.map(v => v.id === videoId ? finalVideo : v)
-          }
-          return [finalVideo, ...prev]
-        })
-        
-        setMockVideos(prev => {
-          const existing = prev.find(v => v.id === videoId)
-          if (existing) {
-            return prev.map(v => v.id === videoId ? finalVideo : v)
-          }
-          return [finalVideo, ...prev]
-        })
-      }
-      
-      setSelectedVideos([videoId])
-    } catch (error) {
-      console.error('Video processing error:', error)
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      alert(`An error occurred during video analysis.`)
-    } finally {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current)
-      }
-      setAnalysisProgress(100)
-      setCurrentStep('Completed')
-      setTimeout(() => {
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error)
+        alert('Connection error occurred')
         setIsAnalyzing(false)
         setAnalyzingVideo(null)
         setCurrentStep('')
-      }, 1000)
+      }
+      
+      ws.onclose = () => {
+        console.log('WebSocket closed')
+      }
+      
+    } catch (error) {
+      console.error('Video processing error:', error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      alert(`An error occurred during video analysis: ${errorMessage}`)
+      setIsAnalyzing(false)
+      setAnalyzingVideo(null)
+      setCurrentStep('')
     }
   }
 
@@ -368,7 +372,6 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     setIsLoggedIn(false)
     setCurrentUser(undefined)
     setMockVideos([])
-    setSessionVideos([])
     setSelectedVideos([])
     // 강제로 페이지를 완전히 새로고침하여 로그인 상태 초기화
     window.location.href = '/'
@@ -404,7 +407,9 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
         {/* Left Sidebar - History Only */}
         <div className="w-80 flex-shrink-0">
           <HistorySidebar
-            videos={mockVideos}
+            videos={mockVideos.filter((video, index, arr) => 
+              arr.findIndex(v => v.id === video.id) === index
+            )}
             selectedVideos={selectedVideos}
             onVideoToggle={handleVideoToggle}
             onVideoClick={handleVideoClick}
