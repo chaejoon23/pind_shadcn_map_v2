@@ -102,6 +102,18 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
       return
     }
 
+    const videoId = apiClient.extractVideoId(initialUrl) || 'unknown'
+    
+    // 이미 히스토리에 해당 비디오가 있는지 확인
+    const existingVideo = mockVideos.find(v => v.id === videoId)
+    if (existingVideo && existingVideo.locations && existingVideo.locations.length > 0) {
+      // 이미 위치 데이터가 있는 비디오가 존재하면 선택만 하고 처리 완료
+      setSelectedVideos([videoId])
+      initialUrlProcessed.current = true
+      console.log('기존 비디오 발견, 처리 스킵:', existingVideo.title)
+      return
+    }
+
     initializationAttempted.current = true
     
     if (initialLocations) {
@@ -110,9 +122,23 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
         try {
           const videoId = apiClient.extractVideoId(initialUrl) || 'unknown'
           
+          // 실제 제목을 가져오려고 시도
+          let actualTitle = `YouTube Video - ${videoId}` // 기본 제목
+          
+          try {
+            // YouTube oEmbed API를 통해 실제 제목 가져오기 시도
+            const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
+            if (oembedResponse.ok) {
+              const oembedData = await oembedResponse.json()
+              actualTitle = oembedData.title || actualTitle
+            }
+          } catch (error) {
+            // CORS 오류 무시하고 기본 제목 유지
+          }
+          
           const newVideo: VideoData = {
             id: videoId,
-            title: `YouTube Video - ${videoId}`,
+            title: actualTitle,
             thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
             date: new Date().toISOString().split('T')[0],
             locations: initialLocations
@@ -183,7 +209,7 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
       }
       processInitialUrl()
     }
-  }, [initializationComplete, initialUrl, initialLocations])
+  }, [initializationComplete, initialUrl, initialLocations, mockVideos])
 
   // Auto-select the most recently requested video when videos are loaded
   useEffect(() => {
@@ -293,8 +319,21 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
         return // Don't save to history
       }
       
-      // 서버에서 video_title을 제공하는 경우 우선 사용
+      // 서버에서 video_title을 제공하는 경우 우선 사용, 그렇지 않으면 oEmbed로 가져온 실제 제목 사용
       let finalTitle = response.video_title || actualTitle
+      
+      // 서버에서 제목을 제공하지 않고, 기본 제목인 경우 다시 한번 실제 제목 시도
+      if (!response.video_title || finalTitle === `YouTube Video - ${videoId}`) {
+        try {
+          const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
+          if (oembedResponse.ok) {
+            const oembedData = await oembedResponse.json()
+            finalTitle = oembedData.title || finalTitle
+          }
+        } catch (error) {
+          // CORS 오류 무시하고 기존 제목 유지
+        }
+      }
       
       const finalVideo: VideoData = {
         ...videoDataForAnalysis,
@@ -306,7 +345,14 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
       setMockVideos(prev => {
         const existing = prev.find(v => v.id === videoId)
         if (existing) {
-          return prev.map(v => v.id === videoId ? finalVideo : v)
+          // 기존 비디오 업데이트: 위치만 병합하고 기존 위치 우선
+          const mergedVideo = {
+            ...existing,
+            locations: existing.locations.length > 0 ? existing.locations : locations,
+            title: existing.title !== `YouTube Video - ${videoId}` ? existing.title : finalTitle,
+            thumbnail: existing.thumbnail || finalVideo.thumbnail
+          }
+          return prev.map(v => v.id === videoId ? mergedVideo : v)
         }
         return [finalVideo, ...prev]
       })

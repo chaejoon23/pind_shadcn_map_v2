@@ -20,7 +20,22 @@ export default function DashboardPage() {
   const initialLocations = locationsParam ? (() => {
     try {
       const parsed = JSON.parse(decodeURIComponent(locationsParam))
-      return parsed.map((place: any, index: number) => ({
+      console.log('대시보드: 파싱된 locations 데이터:', parsed);
+      
+      // 플라즈모에서 전달된 데이터 구조 확인
+      let placesArray = [];
+      if (Array.isArray(parsed)) {
+        // 배열인 경우 (기존 구조)
+        placesArray = parsed;
+      } else if (parsed && parsed.places && Array.isArray(parsed.places)) {
+        // 객체에 places 배열이 있는 경우 (새 구조)
+        placesArray = parsed.places;
+      } else {
+        console.warn('대시보드: 예상하지 못한 locations 데이터 구조:', parsed);
+        return [];
+      }
+      
+      return placesArray.map((place: any, index: number) => ({
         id: `place-${index}`,
         name: place.name || 'Unknown Place',
         address: '',

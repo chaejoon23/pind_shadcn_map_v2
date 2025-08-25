@@ -30,6 +30,7 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
   const [markers, setMarkers] = useState<any[]>([])
   const [isMapLoaded, setIsMapLoaded] = useState(false)
   const [userZoomed, setUserZoomed] = useState(false)
+  const [shouldFitBounds, setShouldFitBounds] = useState(false)
   const [videoUrl, setVideoUrl] = useState("")
 
   // URL validation
@@ -156,8 +157,13 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
             setIsMapLoaded(true)
 
             // Add listener for user zoom changes
+            let zoomTimeout: NodeJS.Timeout
             mapInstance.addListener('zoom_changed', () => {
-              setUserZoomed(true)
+              // Clear previous timeout to avoid setting userZoomed during programmatic zoom
+              clearTimeout(zoomTimeout)
+              zoomTimeout = setTimeout(() => {
+                setUserZoomed(true)
+              }, 100) // Small delay to distinguish user zoom from programmatic zoom
             })
           }
         }
@@ -204,8 +210,9 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
   useEffect(() => {
     if (!googleMap || !isMapLoaded || !window.google || !window.google.maps) return
 
-    // Reset userZoomed when locations change, allowing fitBounds to run again
+    // Reset userZoomed when locations change and trigger fitBounds
     setUserZoomed(false)
+    setShouldFitBounds(true)
 
     // Clear existing markers safely
     markers.forEach(marker => {
@@ -478,8 +485,8 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
 
     setMarkers(newMarkers)
 
-    // Fit bounds to show all markers, only if user hasn't manually zoomed
-    if (newMarkers.length > 0 && !userZoomed) {
+    // Fit bounds to show all markers
+    if (newMarkers.length > 0 && (shouldFitBounds || !userZoomed)) {
       const bounds = new window.google.maps.LatLngBounds()
       newMarkers.forEach(marker => bounds.extend(marker.getPosition()!))
       googleMap.fitBounds(bounds)
@@ -489,6 +496,9 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
         if (googleMap.getZoom()! > 15) googleMap.setZoom(15)
         window.google.maps.event.removeListener(listener)
       })
+      
+      // Reset shouldFitBounds flag after fitting bounds
+      setShouldFitBounds(false)
     }
 
     // Cleanup function for markers
@@ -509,6 +519,43 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleMap, locations, selectedLocation, isMapLoaded])
+
+  // Handle selectedLocation change - fit bounds to show appropriate locations
+  useEffect(() => {
+    if (!googleMap || !isMapLoaded || !window.google?.maps) return
+
+    let locationsToShow: LocationData[] = []
+    
+    if (selectedLocation) {
+      // Show locations of selected video
+      locationsToShow = locations.filter(loc => loc.videoId === selectedLocation.videoId)
+    } else {
+      // Show all locations when no video is selected
+      locationsToShow = locations
+    }
+    
+    if (locationsToShow.length > 0) {
+      const bounds = new window.google.maps.LatLngBounds()
+      locationsToShow.forEach(location => {
+        bounds.extend({ lat: location.coordinates.lat, lng: location.coordinates.lng })
+      })
+      
+      googleMap.fitBounds(bounds)
+      
+      // Ensure appropriate zoom level
+      const listener = window.google.maps.event.addListener(googleMap, "idle", () => {
+        const currentZoom = googleMap.getZoom()
+        if (locationsToShow.length === 1 && currentZoom! < 14) {
+          // For single location, zoom in more
+          googleMap.setZoom(14)
+        } else if (currentZoom! > 15) {
+          // Don't zoom too much for multiple locations
+          googleMap.setZoom(15)
+        }
+        window.google.maps.event.removeListener(listener)
+      })
+    }
+  }, [googleMap, selectedLocation, locations, isMapLoaded])
 
   return (
     <div className="h-full relative bg-gray-100">
@@ -539,7 +586,16 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
                   ${isAnalyzing ? 'px-8 py-3' : 'p-3'} 
                 `}
               >
-                <Search className="w-4 h-4" />
+                {isAnalyzing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-4 h-4" />
+                  </>
+                )}
               </Button>
             </div>
           </div>

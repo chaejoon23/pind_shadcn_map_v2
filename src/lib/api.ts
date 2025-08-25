@@ -138,10 +138,26 @@ class ApiClient {
     // 비디오 ID 추출하여 썸네일 생성
     const videoId = this.extractVideoId(url);
     
+    // 실제 비디오 제목을 가져오려고 시도
+    let actualTitle = videoId ? `YouTube Video - ${videoId}` : 'YouTube Video';
+    
+    if (videoId) {
+      try {
+        const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
+        if (oembedResponse.ok) {
+          const oembedData = await oembedResponse.json();
+          actualTitle = oembedData.title || actualTitle;
+        }
+      } catch (error) {
+        // CORS 오류나 기타 오류 무시하고 기본 제목 유지
+        console.log('YouTube oEmbed API 호출 실패:', error);
+      }
+    }
+
     return {
       mode: response.mode,
       places: response.places,
-      video_title: videoId ? `YouTube Video - ${videoId}` : 'YouTube Video',
+      video_title: actualTitle,
       video_thumbnail: videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : undefined
     };
   }
@@ -153,11 +169,25 @@ class ApiClient {
     console.log('Received history data:', historyData.length, 'videos');
     
     // Convert backend response to VideoData format
-    const convertedData = historyData.map((item) => {
-      // Use default value if title is missing or empty
-      const title = item.title && item.title.trim() 
+    const convertedData = await Promise.all(historyData.map(async (item) => {
+      // 실제 비디오 제목을 가져오려고 시도
+      let title = item.title && item.title.trim() 
         ? item.title 
         : `YouTube Video - ${item.id}`;
+      
+      // 서버에서 제목이 없거나 기본 제목인 경우 실제 제목 가져오기
+      if (!item.title || item.title.trim() === '' || title === `YouTube Video - ${item.id}`) {
+        try {
+          const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${item.id}&format=json`);
+          if (oembedResponse.ok) {
+            const oembedData = await oembedResponse.json();
+            title = oembedData.title || title;
+          }
+        } catch (error) {
+          // CORS 오류나 기타 오류 무시하고 기본 제목 유지
+          console.log(`YouTube oEmbed API 호출 실패 (${item.id}):`, error);
+        }
+      }
       
       // 유효한 좌표를 가진 위치만 포함
       const validLocations = (item.places || []).filter(place => 
@@ -184,7 +214,7 @@ class ApiClient {
         date: new Date(item.created_at).toISOString().split('T')[0],
         locations: validLocations
       };
-    });
+    }));
     
     // Filter out videos with 0 valid locations
     const videosWithLocations = convertedData.filter(video => video.locations.length > 0);

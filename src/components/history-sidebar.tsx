@@ -145,11 +145,11 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
             </div>
           )}
           
-          {videos.map((video) => {
+          {videos.map((video, index) => {
             const isSelected = selectedVideos.includes(video.id)
             return (
               <div
-                key={`mobile-${video.id}`}
+                key={`mobile-${video.id}-${index}`}
                 className="flex p-3 rounded-lg hover:bg-gray-100 transition-colors items-center space-x-3 border-2 border-transparent hover:border-black"
               >
                 <Checkbox
