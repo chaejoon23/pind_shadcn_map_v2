@@ -2,10 +2,9 @@
 
 import { useRef, useState, useEffect } from "react"
 import type { LocationData } from "@/components/main-dashboard"
-import { Tag } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, Link2 } from 'lucide-react'
+import { Search, Link2, Tag } from 'lucide-react'
 import { apiClient } from "@/lib/api"
 
 // Google Maps type declaration
@@ -277,7 +276,7 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
         )
         
         // Get unique video titles for these locations
-        const uniqueVideoIds = [...new Set(similarLocations.map(loc => loc.videoId))]
+        const uniqueVideoIds = Array.from(new Set(similarLocations.map(loc => loc.videoId)))
         overlapVideos = uniqueVideoIds.map(videoId => {
           const vid = videos.find(v => v.id === videoId)
           return vid ? vid.title : `YouTube Video - ${videoId}`

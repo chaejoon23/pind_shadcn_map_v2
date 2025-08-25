@@ -22,14 +22,22 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth, onNavigateToDashboard 
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [isFocused, setIsFocused] = useState(false)
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null)
 
   // 컴포넌트 마운트 시 로그인 상태 확인
   useEffect(() => {
     const checkAuthStatus = () => {
       const authenticated = apiClient.isAuthenticated()
       const email = apiClient.getUserEmail()
+      const wasLoggedIn = isLoggedIn
       setIsLoggedIn(authenticated)
       setUserEmail(email)
+      
+      // 로그인 상태가 false에서 true로 변경되고 대기 중인 URL이 있으면 자동 분석
+      if (!wasLoggedIn && authenticated && pendingUrl) {
+        setPendingUrl(null)
+        processUrlAfterLogin(pendingUrl)
+      }
     }
     
     checkAuthStatus()
@@ -37,7 +45,42 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth, onNavigateToDashboard 
     // 로그인 상태 변화를 감지하기 위해 주기적으로 확인
     const interval = setInterval(checkAuthStatus, 1000)
     return () => clearInterval(interval)
-  }, [])
+  }, [isLoggedIn, pendingUrl])
+
+  const processUrlAfterLogin = async (url: string) => {
+    setIsAnalyzing(true)
+    setError("")
+    setVideoUrl(url) // URL 입력 필드에도 반영
+
+    try {
+      const response = await apiClient.processYouTubeURL(url)
+      
+      // API 응답을 앱에서 사용하는 형식으로 변환
+      const videoId = apiClient.extractVideoId(url)
+      if (videoId) {
+        const locations = apiClient.convertApiPlacesToLocations(response.places, videoId)
+        
+        // Check if no places were found
+        if (locations.length === 0) {
+          setError("0 places found")
+          return // Don't save to history or call onAnalyzeVideo
+        }
+        
+        // 분석 결과와 함께 콜백 호출
+        onAnalyzeVideo(url, locations)
+      } else {
+        setError("Invalid YouTube URL")
+        return
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred during video analysis.')
+      
+      // 오류가 발생해도 빈 결과로 대시보드 이동
+      onAnalyzeVideo(url, [])
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,6 +89,7 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth, onNavigateToDashboard 
     // Check if user is logged in before allowing analysis
     if (!isLoggedIn) {
       setError("Please log in first to use the service.")
+      setPendingUrl(videoUrl) // 로그인 후 분석할 URL 저장
       setTimeout(() => {
         onShowAuth('login')
       }, 1000)
@@ -56,9 +100,6 @@ export function LandingPage({ onAnalyzeVideo, onShowAuth, onNavigateToDashboard 
     setError("")
 
     try {
-      // JWT 토큰과 함께 YouTube URL 전송
-      const isAuthenticated = apiClient.isAuthenticated()
-      
       const response = await apiClient.processYouTubeURL(videoUrl)
       
       // API 응답을 앱에서 사용하는 형식으로 변환

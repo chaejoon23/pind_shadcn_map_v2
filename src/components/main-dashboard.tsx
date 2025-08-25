@@ -50,7 +50,6 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
   const [showCheckedVideos, setShowCheckedVideos] = useState(false)
   const [clickedVideo, setClickedVideo] = useState<VideoData | null>(null)
   const [mockVideos, setMockVideos] = useState<VideoData[]>([])
-  const [sessionVideos, setSessionVideos] = useState<VideoData[]>([])
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string; avatar?: string } | undefined>(undefined)
   const [isAnalyzing, setIsAnalyzing] = useState(false) // URL 분석 상태
@@ -88,10 +87,6 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
         } catch (error) {
           // 히스토리 불러오기 실패 시 빈 상태로 시작
         }
-      } else {
-        // 비로그인 사용자: 빈 상태로 시작
-        setCurrentUser(undefined)
-        setMockVideos([])
       }
     }
     
@@ -162,15 +157,8 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
               locations
             }
             
-            const currentlyLoggedIn = apiClient.isAuthenticated()
-            if (currentlyLoggedIn) {
-              // 로그인 사용자: 히스토리에 추가
-              setMockVideos(prev => [newVideo, ...prev])
-            } else {
-              // 비로그인 사용자: 세션 비디오로 설정
-              setSessionVideos([newVideo])
-              setMockVideos([newVideo])
-            }
+            // 히스토리에 추가
+            setMockVideos(prev => [newVideo, ...prev])
             setSelectedVideos([videoId])
             initialUrlProcessed.current = true
             console.log('초기 URL 처리 완료, 위치 추가됨')
@@ -257,7 +245,6 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
       clearInterval(progressIntervalRef.current)
     }
 
-    const currentlyLoggedIn = apiClient.isAuthenticated()
     const videoId = apiClient.extractVideoId(url) || 'unknown'
     
     
@@ -318,31 +305,13 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
         locations
       }
       
-      if (currentlyLoggedIn) {
-        setMockVideos(prev => {
-          const existing = prev.find(v => v.id === videoId)
-          if (existing) {
-            return prev.map(v => v.id === videoId ? finalVideo : v)
-          }
-          return [finalVideo, ...prev]
-        })
-      } else {
-        setSessionVideos(prev => {
-          const existing = prev.find(v => v.id === videoId)
-          if (existing) {
-            return prev.map(v => v.id === videoId ? finalVideo : v)
-          }
-          return [finalVideo, ...prev]
-        })
-        
-        setMockVideos(prev => {
-          const existing = prev.find(v => v.id === videoId)
-          if (existing) {
-            return prev.map(v => v.id === videoId ? finalVideo : v)
-          }
-          return [finalVideo, ...prev]
-        })
-      }
+      setMockVideos(prev => {
+        const existing = prev.find(v => v.id === videoId)
+        if (existing) {
+          return prev.map(v => v.id === videoId ? finalVideo : v)
+        }
+        return [finalVideo, ...prev]
+      })
       
       setSelectedVideos([videoId])
     } catch (error) {
@@ -368,7 +337,6 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     setIsLoggedIn(false)
     setCurrentUser(undefined)
     setMockVideos([])
-    setSessionVideos([])
     setSelectedVideos([])
     // 강제로 페이지를 완전히 새로고침하여 로그인 상태 초기화
     window.location.href = '/'
