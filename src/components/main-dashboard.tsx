@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { MapView } from "@/components/map-view"
 import { MobileOverlay } from "@/components/mobile-overlay"
 import { Button } from "@/components/ui/button"
@@ -248,9 +248,23 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     const videoId = apiClient.extractVideoId(url) || 'unknown'
     
     
+    // 먼저 실제 제목을 가져오려고 시도
+    let actualTitle = `YouTube Video - ${videoId}` // 기본 제목
+    
+    try {
+      // YouTube oEmbed API를 통해 실제 제목 가져오기 시도
+      const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
+      if (oembedResponse.ok) {
+        const oembedData = await oembedResponse.json()
+        actualTitle = oembedData.title || actualTitle
+      }
+    } catch (error) {
+      // CORS 오류 무시하고 기본 제목 유지
+    }
+
     const videoDataForAnalysis: VideoData = {
       id: videoId,
-      title: `YouTube Video - ${videoId}`, // 임시 제목, 나중에 업데이트
+      title: actualTitle,
       thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
       date: new Date().toISOString().split('T')[0],
       locations: []
@@ -261,8 +275,6 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     setIsAnalyzing(true)
     setAnalysisProgress(0)
     setCurrentStep('')
-    
-    // 클라이언트에서는 기본 제목 사용, 서버 응답에서 실제 제목 받아옴
     
     try {
       // 서버가 동기 처리하므로 즉시 완료 상태로 설정
@@ -281,22 +293,8 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
         return // Don't save to history
       }
       
-      // 서버에서 video_title을 제공하지 않는 경우, 클라이언트에서 제목을 가져옴
-      let finalTitle = response.video_title || videoDataForAnalysis.title
-      
-      // 서버에서 제목이 없으면 YouTube oEmbed API를 통해 제목 시도 (프록시 없이)
-      if (!response.video_title || response.video_title === 'undefined') {
-        try {
-          // YouTube oEmbed API를 직접 호출 시도 (일부 브라우저에서는 작동할 수 있음)
-          const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
-          if (oembedResponse.ok) {
-            const oembedData = await oembedResponse.json()
-            finalTitle = oembedData.title || finalTitle
-          }
-        } catch (error) {
-          // CORS 오류 무시하고 기본 제목 유지 (정상적인 동작)
-        }
-      }
+      // 서버에서 video_title을 제공하는 경우 우선 사용
+      let finalTitle = response.video_title || actualTitle
       
       const finalVideo: VideoData = {
         ...videoDataForAnalysis,
@@ -354,6 +352,15 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
     window.location.href = '/'
   }
 
+  // Memoized empty functions to prevent re-renders
+  const handlePinClick = useCallback(() => {
+    // Empty click handler for now
+  }, [])
+
+  const handlePinHover = useCallback(() => {
+    // Empty hover handler for now
+  }, [])
+
   return (
     <div className="h-screen flex bg-gray-50">
       {/* Desktop Layout */}
@@ -402,12 +409,14 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
           <MapView
             locations={enhancedSelectedLocations}
             selectedLocation={null}
-            onPinClick={() => {}}
+            onPinClick={handlePinClick}
+            onPinHover={handlePinHover}
             onProcessUrl={processYouTubeURL}
             onNavigateHome={handleNavigateHome}
             isAnalyzing={isAnalyzing}
             analysisProgress={analysisProgress}
             videos={mockVideos}
+            selectedVideos={selectedVideos}
           />
         </div>
       </div>
@@ -424,6 +433,7 @@ export function MainDashboard({ initialUrl, initialLocations, user, onShowAuth }
           isAnalyzing={isAnalyzing}
           analysisProgress={analysisProgress}
           videos={mockVideos}
+          selectedVideos={selectedVideos}
         />
 
         {/* Mobile Menu Button */}

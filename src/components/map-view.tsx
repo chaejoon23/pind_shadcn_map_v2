@@ -5,15 +5,8 @@ import type { LocationData } from "@/components/main-dashboard"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Search, Link2, Tag } from 'lucide-react'
-import { apiClient } from "@/lib/api"
 
-// Google Maps type declaration
-declare global {
-  interface Window {
-    google: typeof google
-  }
-  var google: any
-}
+// Google Maps types are declared in google-maps-api.ts
 
 interface MapViewProps {
   locations: LocationData[]
@@ -25,13 +18,15 @@ interface MapViewProps {
   isAnalyzing?: boolean
   analysisProgress?: number
   videos?: Array<{ id: string; title: string; thumbnail: string }>
+  selectedVideos?: string[]
 }
 
-export function MapView({ locations, selectedLocation, onPinClick, onPinHover, onProcessUrl, onNavigateHome, isAnalyzing, analysisProgress, videos = [] }: MapViewProps) {
+export function MapView({ locations, selectedLocation, onPinClick, onPinHover, onProcessUrl, isAnalyzing, videos = [], selectedVideos = [] }: MapViewProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [hoveredLocation, setHoveredLocation] = useState<LocationData | null>(null)
-  const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [googleMap, setGoogleMap] = useState<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [markers, setMarkers] = useState<any[]>([])
   const [isMapLoaded, setIsMapLoaded] = useState(false)
   const [userZoomed, setUserZoomed] = useState(false)
@@ -51,13 +46,14 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
       }
       // 검색 완료 후 입력창 비우기
       setVideoUrl("")
-    } catch (error) {
+    } catch {
       // URL 처리 오류 발생
     }
   }
 
   // Load Google Maps API directly with better error handling
   const loadGoogleMapsAPI = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return new Promise<any>((resolve, reject) => {
       // Check if already loaded
       if (window.google && window.google.maps && window.google.maps.Map) {
@@ -72,7 +68,7 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
       }
 
       // Check if script already exists
-      let existingScript = document.querySelector('script[data-google-maps-api="true"]')
+      const existingScript = document.querySelector('script[data-google-maps-api="true"]')
       if (existingScript) {
         // Wait for existing script to load
         const checkLoaded = () => {
@@ -121,24 +117,26 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
   // Initialize Google Maps
   useEffect(() => {
     let isMounted = true
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let mapInstance: any = null
+    const currentMapRef = mapRef.current
     
     const initializeMap = async () => {
       try {
         const google = await loadGoogleMapsAPI()
         
         // Check if component is still mounted
-        if (!isMounted || !mapRef.current) {
+        if (!isMounted || !currentMapRef) {
           return
         }
         
         if (google && google.maps && google.maps.Map) {
           // Clear any existing content first
-          if (mapRef.current) {
-            mapRef.current.innerHTML = ''
+          if (currentMapRef) {
+            currentMapRef.innerHTML = ''
           }
           
-          mapInstance = new google.maps.Map(mapRef.current, {
+          mapInstance = new google.maps.Map(currentMapRef, {
             center: { lat: 37.5665, lng: 126.9780 }, // Seoul default
             zoom: 10,
             styles: [
@@ -163,7 +161,7 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
             })
           }
         }
-      } catch (error) {
+      } catch {
         // Google Maps 초기화 실패
       }
     }
@@ -181,17 +179,17 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
           if (window.google && window.google.maps && window.google.maps.event) {
             window.google.maps.event.clearInstanceListeners(mapInstance)
           }
-        } catch (error) {
+        } catch {
           // Ignore cleanup errors
         }
         mapInstance = null
       }
       
       // Clean up DOM content
-      if (mapRef.current) {
+      if (currentMapRef) {
         try {
-          mapRef.current.innerHTML = ''
-        } catch (error) {
+          currentMapRef.innerHTML = ''
+        } catch {
           // Ignore cleanup errors
         }
       }
@@ -219,7 +217,7 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
         if (window.google?.maps?.event && marker) {
           window.google.maps.event.clearInstanceListeners(marker)
         }
-      } catch (error) {
+      } catch {
         // Ignore marker cleanup errors - this is expected in some cases
       }
     })
@@ -231,8 +229,8 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
 
     const newMarkers = locations.map((location) => {
       const isSelected = selectedLocation?.id === location.id
-      const isHighlighted = (location as any).isHighlighted
-      const overlapCount = (location as any).overlapCount || 1
+      const isHighlighted = (location as LocationData & { isHighlighted?: boolean }).isHighlighted
+      const overlapCount = (location as LocationData & { overlapCount?: number }).overlapCount || 1
       
       // 중복 위치에 따른 색상 결정
       let markerColor = "#ef4444" // Default red
@@ -504,12 +502,13 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
           if (window.google?.maps?.event && marker) {
             window.google.maps.event.clearInstanceListeners(marker)
           }
-        } catch (error) {
+        } catch {
           // Ignore cleanup errors - this is expected in some cases
         }
       })
     }
-  }, [googleMap, locations, selectedLocation, isMapLoaded, onPinClick, onPinHover])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleMap, locations, selectedLocation, isMapLoaded])
 
   return (
     <div className="h-full relative bg-gray-100">
@@ -540,16 +539,7 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
                   ${isAnalyzing ? 'px-8 py-3' : 'p-3'} 
                 `}
               >
-                {isAnalyzing ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-4 h-4" />
-                  </>
-                )}
+                <Search className="w-4 h-4" />
               </Button>
             </div>
           </div>
@@ -575,22 +565,15 @@ export function MapView({ locations, selectedLocation, onPinClick, onPinHover, o
           </div>
         )}
 
-        {/* Analyzing overlay */}
-        {isAnalyzing && isMapLoaded && (
+        {/* Analyzing overlay - 선택된 비디오가 없을 때만 표시 */}
+        {isAnalyzing && isMapLoaded && selectedVideos.length === 0 && (
           <div className="absolute inset-0 bg-black/20 flex items-center justify-center pointer-events-none z-30">
             <div className="text-center bg-white/95 p-8 rounded-2xl shadow-lg border-2 border-black max-w-md">
               <div className="w-16 h-16 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
               <h3 className="text-xl font-bold text-black mb-2">Analyzing Video</h3>
-              <p className="text-gray-600 text-sm leading-relaxed mb-4">
-                We're extracting locations from the YouTube video. This may take a moment...
+              <p className="text-gray-600 text-sm leading-relaxed">
+                We&apos;re extracting locations from the YouTube video. This may take a moment...
               </p>
-              <div className="w-full bg-gray-200 rounded-full h-2.5 border-2 border-black">
-                <div 
-                  className="bg-black h-1.5 rounded-full transition-all duration-500 ease-in-out"
-                  style={{ width: `${analysisProgress}%` }}
-                ></div>
-              </div>
-              <p className="text-lg font-bold text-black mt-3">{analysisProgress}%</p>
             </div>
           </div>
         )}

@@ -121,9 +121,10 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
 
       <div className="flex-1 overflow-y-auto">
         <div className="space-y-2 p-4">
-          {/* 분석 중인 비디오 표시 (실제 썸네일과 제목) */}
+          {/* 분석 중인 비디오 표시 */}
           {isAnalyzing && analyzingVideo && (
             <div className="flex p-3 rounded-lg bg-gray-100 border-2 border-gray-500 items-center space-x-3">
+              <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
               <div className="flex-shrink-0 cursor-pointer w-[106px] h-[60px] overflow-hidden rounded border-2 border-gray-500">
                 <Image
                   src={analyzingVideo.thumbnail || "/placeholder.svg"}
@@ -138,20 +139,7 @@ export function HistorySidebar({ videos, selectedVideos, onVideoToggle, onVideoC
                   {analyzingVideo.title}
                 </h3>
                 <div className="text-xs mt-1 font-medium text-gray-600">
-                  <p>Analyzing... {analysisProgress ?? 0}%</p>
-                  {currentStep && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      {(analysisProgress ?? 0) <= 25 ? 'Sending...' :
-                       (analysisProgress ?? 0) <= 75 ? 'Analyzing...' :
-                       (analysisProgress ?? 0) <= 95 ? 'Marking on map...' : 'Completed'}
-                    </p>
-                  )}
-                  <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                    <div 
-                      className="bg-gray-500 h-1.5 rounded-full transition-all duration-500 ease-in-out"
-                      style={{ width: `${analysisProgress ?? 0}%` }}
-                    ></div>
-                  </div>
+                  <p>Analyzing...</p>
                 </div>
               </div>
             </div>
